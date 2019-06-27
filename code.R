@@ -374,14 +374,14 @@ processed_trait_data$bodymass_range = compute_column(
 # NewCohorts, CohortFunctionalGroupDefinitions, MassBinDefinitions and 
 # SimulationControlParameters)
 
-## Simone update the way it searches folders, so it looks for everything in
-## a consistent resultsDir, same as all other code
+## Will need to consolidate input working directory ....
 
-load('madingleyoutputs/13_Baseline-2_Subset_Massbins.rds')
-load('madingleyoutputs/20_Climate-change-1_Newcohorts.rds')
-all_functionalgroups <- read.csv('madingleyoutputs/CohortFunctionalGroupDefinitions.csv')
-lowermassbins <- read.csv('madingleyoutputs/MassBinDefinitions.csv')
-simulationparameters <- read.csv('madingleyoutputs/SimulationControlParameters.csv')
+setwd("N:/Quantitative-Ecology/Indicators-Project/Indicator_inputs")
+
+resultsDir <- 'Serengeti/Baseline/Biomass/'
+all_functionalgroups <- read.csv(paste(resultsDir, "CohortFunctionalGroupDefinitions.csv", sep = "")) # should not change between runs
+lowermassbins <- read.csv(paste(resultsDir,'MassBinDefinitions.csv', sep = "")) # could change if user changes mass bins
+simulationparameters <- read.csv(paste(resultsDir,'SimulationControlParameters.csv', sep = "")) #Can change between runs
 
 # Calculate upper massbins and join with lower bins output by model
 
@@ -393,6 +393,11 @@ massbins <- cbind(lowermassbins, Mass.bin.upper.bound) %>%
 
 
 # Retrieve the burnin period from your simulation outputs
+
+## NOTE: baseline sets burn-in as zero so need to an add if-statement so it
+## adds 1000 if calculating for baseline scenario
+
+# burn_in <- 1000
 
 burn_in <- as.numeric(as.character(simulationparameters[3,2])) * 12 
 
@@ -480,7 +485,7 @@ replicated_functionalgroups <- merged_functionalgroups %>%
                                    
                                    
 ## Merge replicated bodymass and functional group dataframes to create a 
-# species definition dataframe, list and index
+## species definition dataframe, list and index
 
 species_definitions <-  data.frame(replicated_functionalgroups, 
                                    replicated_massbins) %>%
@@ -491,5 +496,8 @@ species_definitions_list <- split(species_definitions,
                                   species_definitions$fg.name)
 
 
+############################################################################
+### Develop functional group keys to match processed trait data with Madingley output
+############################################################################
 
 
