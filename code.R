@@ -500,4 +500,89 @@ species_definitions_list <- split(species_definitions,
 ### Develop functional group keys to match processed trait data with Madingley output
 ############################################################################
 
+# Pull outputs (I've done this the cheats way, be 
+# good to change this so it pulls directly without having to specify names)
 
+Base1_Biomass <- readRDS(paste(resultsDir, '10_baseline_1_FunctionalGroupBiomass.rds', sep = ""))
+Base2_Biomass <- readRDS(paste(resultsDir,'13_baseline-2_FunctionalGroupBiomass.rds', sep = ""))
+
+# Combine batches into one list per scenario (can be combined with above step)
+
+BaselineBiomass <- c(Base1_Biomass, Base2_Biomass)
+
+
+############################################################################
+### Calculate Generation Lengths
+############################################################################
+
+## NOTE - very untidy, haven't double checked everything does what I think but
+## you can get the gist.  Also only works for one file so far ...
+
+load('Serengeti/Baseline/Biomass/10_baseline_Newcohorts.rds')
+#load('Serengeti/Baseline/Biomass/13_baseline_2_Newcohorts.rds')
+
+newcohorts <- NewCohorts[[1]]
+
+
+# Rename NewCohort column names (Simone add this to processoutput code)
+
+tidy.name.vector <- make.names(names(newcohorts), unique=TRUE)
+
+for (i in seq_along(NewCohorts)) {
+  
+  names(NewCohorts[[i]]) <- tidy.name.vector
+  
+}
+
+# For a single file in NewCohorts list (will develop so it loops over list, 
+# might require bigmemory or ff package)
+
+## Get timestep each cohort was born
+
+born <- NewCohorts[[1]] %>%
+  select(offspring.cohort.ID, functional.group, adult.mass, time_step) 
+
+## Get timestep each cohort reaches reproductive maturity (check this is right)
+
+reproduced <- NewCohorts[[1]] %>%
+  select(parent.cohort.IDs, time_step) 
+
+## Merge to create dataframe with timestep born, timestep reached maturity for
+## each cohort
+
+BornReproduced <- merge(born, reproduced, by.x = "offspring.cohort.ID", 
+                        by.y = "parent.cohort.IDs")
+
+## Calculate generation length for each cohort
+
+GenerationLength <- BornReproduced %>%
+  group_by(offspring.cohort.ID) %>%
+  filter(time_step.y == min(time_step.y)) %>%
+  mutate(gen.length = (time_step.y - time_step.x)/12) # Check newcohorts files are in monthly timesteps
+
+## Rename columns
+
+names(GenerationLength) <- c("cohort.ID", "functionalgroup_index","bodymass",
+                             "birth.timestep","first.reproduced.timestep",
+                             "gen.length")
+
+## Add species definition index to the cohort IDs (so now we know what kind of
+## species each cohort should be)
+
+species_definitions_df <- do.call(rbind,species_definitions_list)
+
+species_definitions_df$functionalgroup_index <- as.numeric(species_definitions_df$functionalgroup_index)
+
+GenerationLengthAll <- GenerationLength %>%
+  left_join(species_definitions_df[,c("species_index",
+                                      "functionalgroup_index", "fg.name",
+                                      "bodymass_index", "Mass.bin.lower.bound", 
+                                      "Mass.bin.upper.bound")], 
+            by = c("functionalgroup_index")) %>%
+  filter(bodymass < Mass.bin.upper.bound &
+           bodymass > Mass.bin.lower.bound) 
+
+## Next step is to think about how to return generation length info to the 
+## species mapping.  Probably good to split the dataframe by species type and make 
+## sure there's nothing weird going on - do we need to calculate a mean per species
+## or something?
