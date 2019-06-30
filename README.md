@@ -6,13 +6,13 @@ I didn't actually finish the code in this repository, there was a missing file (
 I wrote this Readme to show you what's going on though.
 
 Working:
-get_groups (needs cleaning)
-get_trait_data (need to update functionaltraits so that it saves progress while downloading information)
-get_biomass_of_groups (needs work though)
+- get_groups (needs cleaning)
+- get_trait_data (need to update functionaltraits so that it saves progress while downloading information)
+- get_biomass_of_groups (needs work though)
 
 Not working:
-get_species_and_groups_key
-code.R
+- get_species_and_groups_key
+-code.R
 
 #### Overview
 The code in this repository matches a list of species with functional groups from the output of the Madingley model.
