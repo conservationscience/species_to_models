@@ -19,8 +19,7 @@ get_species_and_groups_key <- function( comparable_taxa, groups ) {
   for( i in 1:nrow(groups) ) {
     group <- as.list( groups[i,] )
     
-    #### TODO: Check with @Simone -- should we use equal to and greater than (>=) or greater than (>) operators
-    ### to compare bodymasses. Should work this out myself.
+    #### TODO: Check with @Simone; when a bodymass is equal to the lower mass, it is placed in that category.
     
     species_in_this_group <- comparable_taxa[ 
       which(
@@ -28,7 +27,7 @@ get_species_and_groups_key <- function( comparable_taxa, groups ) {
         & comparable_taxa$nutrition_source == group$nutrition_source
         & comparable_taxa$thermoregulation == group$endo_ectotherm
         & comparable_taxa$bodymass >= group$mass_lower
-        & comparable_taxa$bodymass <= group$mass_upper
+        & comparable_taxa$bodymass < group$mass_upper
       ),
       "species_id"
       ]

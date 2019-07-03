@@ -15,6 +15,8 @@ library(functionaltraits)
 # Set working directory to the ndrive 
 setwd( "/media/ndrive/Indicators-Project" )
 
+# Note, if you want to view scientific numbers as normal numbers, you can use: options("scipen" = 10)
+
 
 #########################################
 # Get species traits
@@ -85,7 +87,6 @@ rm( indexes_of_comparable_taxa )
 # NewCohorts, CohortFunctionalGroupDefinitions, MassBinDefinitions and 
 # SimulationControlParameters)
 
-## Will need to consolidate input working directory ....
 
 resultsDir <- 'Indicator_inputs/Serengeti/Baseline/Biomass'
 
@@ -120,23 +121,16 @@ species_and_groups_key <- get_species_and_groups_key( comparable_taxa, groups )
 
 # note -- this code will be moved into get_biomass_of_groups.R when it works
 
-madingley_biomass <- readRDS( "Indicator_inputs/Serengeti/Baseline/Biomass/10_baseline-1_FunctionalGroupBiomass.rds" )
+madingley_biomass_raw <- readRDS( "Indicator_inputs/Serengeti/Baseline/Biomass/10_baseline-1_FunctionalGroupBiomass.rds" )
 
-# select only the elements of the list that we need
-madingley_biomass_selected <- madingley_biomass[c(
-  "Log carnivore ectotherm  biomass in mass bins ",
-  "Log carnivore endotherm  biomass in mass bins ",
-  "Log herbivore ectotherm  biomass in mass bins ",
-  "Log herbivore endotherm  biomass in mass bins ",
-  "Log omnivore ectotherm  biomass in mass bins ",
-  "Log omnivore endotherm  biomass in mass bins "
-)]
+# TODO - @Simone, how do I iterate over the replicates?
+madingley_biomass <- madingley_biomass_raw$`FunctionalGroupBiomass_baseline-1_0_Cell0.nc`
 
 # add the group_id to each row of the matrices, so it can be matched with species through get_species_and_groups_key
 # and so it can be matched to the group through get_groups
 
-for( name_of_matrix in names( madingley.output.selected ) ) {
-  matrix <- madingley.output.selected[[ name_of_matrix ]]
+for( name_of_matrix in names( madingley_biomass ) ) {
+  matrix <- madingley_biomass[[ name_of_matrix ]]
   
   group_ids <- data.frame(
     "index" = 1:(dim( matrix )[1]),
@@ -146,29 +140,33 @@ for( name_of_matrix in names( madingley.output.selected ) ) {
   # the number of rows is the number of bodymass categories that were used in the model simulation
   # it also serves as the bodymass_index
   for( bodymass_index in 1:(dim( matrix )[1]) ) {
-    functionalgroup_name <- sub( "Log ","", name_of_matrix )
-    functionalgroup_name <- sub( "  biomass in mass bins ","", functionalgroup_name )
     
-    group_id <-  groups[ which( groups$fg.name == functionalgroup_name & groups$bodymass_index==bodymass_index), "group_id"]
+    group_id <-groups[ which( groups$functional_group_name == name_of_matrix & groups$bodymass_index==bodymass_index), "group_id"]
     
     # TODO: fix this so you don't have to check if it is empty
-    if( length( group_id ) != 0 )
+    if( length( group_id ) != 0 ) {
       group_ids[ which( group_ids$index == bodymass_index), "group_id"]  <- group_id
+    }
     
   }
   
-  row.names(  madingley.output.selected[[ name_of_matrix ]] ) <- group_ids$group_id
+  row.names(  madingley_biomass[[ name_of_matrix ]] ) <- group_ids$group_id
 }
 
 # combine them all together into a big matrix
 log_biomass_through_time <- rbind(
-  madingley.output.selected[["Log carnivore ectotherm  biomass in mass bins "]],
-  madingley.output.selected[["Log carnivore endotherm  biomass in mass bins "]],
-  madingley.output.selected[["Log herbivore ectotherm  biomass in mass bins "]],
-  madingley.output.selected[["Log herbivore endotherm  biomass in mass bins "]],
-  madingley.output.selected[["Log omnivore ectotherm  biomass in mass bins "]],
-  madingley.output.selected[["Log omnivore endotherm  biomass in mass bins "]]
+  madingley_biomass[["carnivore ectotherm"]],
+  madingley_biomass[["carnivore endotherm"]],
+  madingley_biomass[["herbivore ectotherm"]],
+  madingley_biomass[["herbivore endotherm"]],
+  madingley_biomass[["omnivore ectotherm"]],
+  madingley_biomass[["omnivore endotherm"]]
 )
+
+
+#### DONE. log_biomass_through_time should be the output of get_groups.R
+
+
 
 
 
@@ -184,8 +182,114 @@ log_biomass_through_time <- rbind(
 # Get useful dataframes to check the data
 #########################################
 
+# Note: Each comment is the description of the data that the code below it generates
+
+# Note: There is also the incomparable_taxa variable, which has important information
+
+
+
+# species_in_groups: A full dataframe containing species and group information, together
 species_in_groups <- merge( species_and_groups_key, comparable_taxa ) 
 species_in_groups <- merge( species_in_groups, groups )
 
-# TODO: make one that lists the number of species that are in each "group"
+
+
+
+
+
+
+
+
+
+# species_in_multiple_groups: Species that were assigned to more than one group
+# Note: Species should never be assigned to more than one group, so the in_multiple_groups columns should be all FALSE
+species_in_multiple_groups <- comparable_taxa
+species_in_multiple_groups$groups <- rep( NA, nrow(species_in_multiple_groups) )
+species_in_multiple_groups$in_multiple_groups <- rep( NA, nrow(species_in_multiple_groups) )
+
+for( species_id in unique( species_and_groups_key$species_id ) ) {
+  groups_this_species_is_in <- species_and_groups_key[ which( species_and_groups_key$species_id == species_id ), "group_id"]
+  species_in_multiple_groups[ which( species_in_multiple_groups$species_id == species_id), "groups" ] <- paste(
+    groups_this_species_is_in,
+    collapse = ", "
+  )
+  
+  if( length( groups_this_species_is_in ) > 1 )
+    species_in_multiple_groups[ which( species_in_multiple_groups$species_id == species_id), "in_multiple_groups" ] <- TRUE
+  else
+    species_in_multiple_groups[ which( species_in_multiple_groups$species_id == species_id), "in_multiple_groups" ] <- FALSE
+  
+}
+rm( species_id )
+rm( groups_this_species_is_in )
+
+
+
+
+
+# species_not_assigned_to_any_group: Species that were not assigned to any group
+# NOTE - exclusive of incomparable_taxa
+# NOTE - because we already removed incomparable_taxa, I guess all species should be assigned a group. 
+
+species_not_assigned_to_any_group <- comparable_taxa[ !(unique( species_and_groups_key$species_id ) %in% comparable_taxa$species_id), ]
+
+
+
+
+# analysis_of_groups_by_species: Groups that had multiple species assigned to them, and groups that had no species assigned to them
+analysis_of_groups_by_species <- groups
+analysis_of_groups_by_species$species <- rep( NA, nrow(analysis_of_groups_by_species) )
+analysis_of_groups_by_species$number_of_species <- rep( NA, nrow(analysis_of_groups_by_species) )
+
+for( group_id in groups$group_id ) {
+  species_this_group_has <- species_and_groups_key[ which( species_and_groups_key$group_id == group_id ), "species_id"]
+  analysis_of_groups_by_species[ which( analysis_of_groups_by_species$group_id == group_id), "species" ] <- paste(
+    as.character( species_this_group_has ),
+    collapse = ", "
+  )
+ analysis_of_groups_by_species[ which( analysis_of_groups_by_species$group_id == group_id), "number_of_species" ] <- length( species_this_group_has )
+}
+rm( group_id )
+rm( species_this_group_has )
+
+
+
+
+# groups_that_were_not_present_in_model: A summary of the "groups" that had no biomass in the model simulation
+# groups_that_were_present_in_model: A summary of the "groups" that did have biomass in the model simulation
+rows_that_are_null <- apply( log_biomass_through_time, 1, function( row ) {
+  # if the row is full of dud values, return FALSE to not include that row
+  
+  print( typeof( row ) )
+  
+  if( all( row == rep( -9999, dim(log_biomass_through_time)[2]) ) ) return( TRUE )
+  else return( FALSE )
+} )
+
+groups_that_were_not_present_in_model <- row.names( log_biomass_through_time[rows_that_are_null, ] )
+groups_that_were_present_in_model <- row.names( log_biomass_through_time[!rows_that_are_null, ] )
+rm( rows_that_are_null )
+
+
+
+
+# species_that_were_modelled: The species that were modelled
+# defined as the species that were assigned to a group, and the groups that actually had biomass in the simulation
+
+
+species_that_were_modelled <- unique( species_and_groups_key[
+  which( groups_that_were_present_in_model %in% species_and_groups_key$group_id ), "species_id"
+] )
+
+species_that_were_modelled <- comparable_taxa[ 
+  which( species_that_were_modelled %in% comparable_taxa$species_id ), 
+]
+
+# groups_that_were_modelled: The groups that were modelled, with species information
+groups_that_were_modelled <- analysis_of_groups_by_species
+groups_that_were_modelled$group_modelled <- groups_that_were_modelled$group_id %in% groups_that_were_present_in_model
+
+
+
+
 

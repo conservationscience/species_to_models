@@ -9,6 +9,11 @@ Working:
 Not finished
 - code.R
 
+#### Todo
+- Get the code to work on replicates
+- Turn the code into a package
+- Refactor the code so that this repository can contain all of the adaptors for different models
+
 #### Overview
 The code in this repository matches a list of species with functional groups from the output of the Madingley model.
 
@@ -36,5 +41,3 @@ With these four files, you should be able to do all kinds of analysis and calcul
 - you should be able to quickly do analysis of the data to see if it's valid, eg. a few simple merge()s
   should be able to produce you a table of species in each "group"
 
-#### Todo
-- Need to put the code into a function or a class, and somehow have it save it's progress as it collects trait information and extracts information, so if the computer crashes, it doesn't have to start from the complete beginning
