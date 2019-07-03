@@ -205,19 +205,16 @@ species_in_groups <- merge( species_in_groups, groups )
 # Note: Species should never be assigned to more than one group, so the in_multiple_groups columns should be all FALSE
 species_in_multiple_groups <- comparable_taxa
 species_in_multiple_groups$groups <- rep( NA, nrow(species_in_multiple_groups) )
-species_in_multiple_groups$in_multiple_groups <- rep( NA, nrow(species_in_multiple_groups) )
+species_in_multiple_groups$number_of_groups <- rep( NA, nrow(species_in_multiple_groups) )
 
-for( species_id in unique( species_and_groups_key$species_id ) ) {
+for( species_id in species_in_multiple_groups$species_id ) {
   groups_this_species_is_in <- species_and_groups_key[ which( species_and_groups_key$species_id == species_id ), "group_id"]
   species_in_multiple_groups[ which( species_in_multiple_groups$species_id == species_id), "groups" ] <- paste(
     groups_this_species_is_in,
     collapse = ", "
   )
   
-  if( length( groups_this_species_is_in ) > 1 )
-    species_in_multiple_groups[ which( species_in_multiple_groups$species_id == species_id), "in_multiple_groups" ] <- TRUE
-  else
-    species_in_multiple_groups[ which( species_in_multiple_groups$species_id == species_id), "in_multiple_groups" ] <- FALSE
+  species_in_multiple_groups[ which( species_in_multiple_groups$species_id == species_id), "number_of_groups" ] <- length( groups_this_species_is_in )
   
 }
 rm( species_id )
@@ -231,7 +228,7 @@ rm( groups_this_species_is_in )
 # NOTE - exclusive of incomparable_taxa
 # NOTE - because we already removed incomparable_taxa, I guess all species should be assigned a group. 
 
-species_not_assigned_to_any_group <- comparable_taxa[ !(unique( species_and_groups_key$species_id ) %in% comparable_taxa$species_id), ]
+species_not_assigned_to_any_group <- species_in_multiple_groups[ which(species_in_multiple_groups$number_of_groups == 0), ]
 
 
 
@@ -276,9 +273,8 @@ rm( rows_that_are_null )
 # species_that_were_modelled: The species that were modelled
 # defined as the species that were assigned to a group, and the groups that actually had biomass in the simulation
 
-
 species_that_were_modelled <- unique( species_and_groups_key[
-  which( groups_that_were_present_in_model %in% species_and_groups_key$group_id ), "species_id"
+  which( species_and_groups_key$group_id %in% intersect( groups_that_were_present_in_model, species_and_groups_key$group_id ) ), "species_id"
 ] )
 
 species_that_were_modelled <- comparable_taxa[ 
@@ -289,7 +285,37 @@ species_that_were_modelled <- comparable_taxa[
 groups_that_were_modelled <- analysis_of_groups_by_species
 groups_that_were_modelled$group_modelled <- groups_that_were_modelled$group_id %in% groups_that_were_present_in_model
 
+# summary_statistics
+# number_of_groups_with_biomass -- number of groups that had biomass for at least one time step in the model
+# number_of_groups_with_matched_species -- number of groups that had species match to them
+# number_of_groups_with_biomass_and_matched_species -- number of groups that appeared in the model AND had species match to them
 
+# number_of_species_total -- total number of species that were initially given (perhaps excluding duplicate species)
+# number_of_uncomparable_species -- number of species that we were missing information for, or that were not recognised by the taxonomic database
+# number_of_comparable_species -- number of species that we have enough data to match them to a group
+
+# number_species_matched_to_a_group -- number of species that were successfully matched to a group. SHOULD EQUAL number_of_comparable_species
+# number_of_species_matched_to_multiple_groups_ZERO -- number of species that were matched to multiple groups. SHOULD EQUAL 0
+# number_of_species_not_matched_to_any_group_ZERO -- number of species that were not matched to any group. SHOULD EQUAL 0
+
+# number_of_species_matched_and_in_group_with_biomass -- number of species that were both matched to a group, and the group they were matched to had biomass in at least one time step
+
+summary_statistics <- t( data.frame(
+  "number_of_groups" = nrow( groups ),
+  "number_of_groups_with_biomass" = length( groups_that_were_present_in_model ),
+  "number_of_groups_with_matched_species" = length(unique(species_and_groups_key$group_id)),
+  "number_of_groups_with_biomass_and_matched_species" = length( intersect( groups_that_were_present_in_model, species_and_groups_key$group_id ) ),
+  
+  "number_of_species_total" = nrow( trait_data ),
+  "number_of_uncomparable_species" = nrow( incomparable_taxa ),
+  "number_of_comparable_species" = nrow( comparable_taxa ),
+  
+  "number_species_matched_to_a_group" = length( unique( species_and_groups_key$species_id ) ),
+  "number_of_species_matched_to_multiple_groups_ZERO" = nrow( species_in_multiple_groups[ which(species_in_multiple_groups$number_of_groups > 1), ] ),
+  "number_of_species_not_matched_to_any_group_ZERO" = nrow( species_not_assigned_to_any_group ),
+  
+  "number_of_species_matched_and_in_group_with_biomass" = nrow( species_that_were_modelled )
+) )
 
 
 
