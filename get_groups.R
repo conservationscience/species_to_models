@@ -76,7 +76,7 @@ get_groups <- function( CohortFunctionalGroupDefinitions, MassBinDefinitions, Si
   ## Where trophic level, nutrition and metabolic pathways are the same but reproductive
   ## strategy differs, collapse the functional group id
   
-  merged_functionalgroups_temp <- data.frame()
+  merged_functionalgroups_temp <- data.frame( stringsAsFactors = FALSE)
   
   for(troph in trophic){
     temp1 <- subset_functionalgroups %>% 
@@ -132,8 +132,8 @@ get_groups <- function( CohortFunctionalGroupDefinitions, MassBinDefinitions, Si
   ## Merge replicated bodymass and functional group dataframes to create a 
   ## species definition dataframe, list and index
   
-  species_definitions <-  data.frame(replicated_functionalgroups, 
-                                     replicated_massbins) %>%
+  groups <-  data.frame(replicated_functionalgroups, 
+                                     replicated_massbins, stringsAsFactors = FALSE) %>%
     mutate(species_index = paste(functionalgroup_index, 
                                  bodymass_index, sep = ".")) 
   
@@ -141,9 +141,29 @@ get_groups <- function( CohortFunctionalGroupDefinitions, MassBinDefinitions, Si
   # @ Simone, not sure where you were going with this
   # sorry
   
-  #species_definitions_list <- split(species_definitions, 
-  #                                  species_definitions$fg.name)
-  return( species_definitions )
+  #species_definitions_list <- split(groups, 
+  #                                  groups$fg.name)
+  
+  # change the names
+  # TODO: standardise the name across all of the code
+  names( groups ) <- c( 
+    "heterotroph_autotroph",
+    "nutrition_source",
+    "endo_ectotherm",
+    "functional_group_index",
+    "functional_group_name",
+    "mass_lower",
+    "mass_upper",
+    "bodymass_index",
+    "group_id"   
+  )
+  
+  # change rows to lowercase
+  groups$nutrition_source <- tolower( groups$nutrition_source )
+  groups$heterotroph_autotroph <- tolower( groups$heterotroph_autotroph )
+  groups$endo_ectotherm <- tolower( groups$endo_ectotherm )
+  
+  return( groups )
 }
 
   

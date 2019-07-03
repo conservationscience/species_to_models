@@ -1,7 +1,7 @@
 
 
-# TODO: This file should use the other files in this repository to (do stuff)
-# It's the overarching file
+# TODO: turn this repository into a package
+# TODO: turn this file into a function that works on a single output of the madingley model
 
 library(tidyverse)
 library(plyr)
@@ -46,12 +46,36 @@ species_list <- unique( species_list )
 
 trait_data <- get_trait_data( species_list, databases )
 
+# Or
+# trait_data <- read.csv( "Indicator_outputs/Serengeti/map_of_life/trait_data.csv")
+
+
+
+#########################################
+# Work out which species we will be able to match with the model
+# and make a list of the species that we don't have enough information for
+#########################################
+
+
 ### TODO: What do we want to do with the species that weren't found by the taxonomic system?
 ### TODO: Should these unmatched species still be searched for in the databases?
-unmatched_taxa <- trait_data[ which( trait_data$found == FALSE ), ]
-matched_taxa <- trait_data[ which( trait_data$found == TRUE ), ]
 
-matched_taxa$species_id <- 1:nrow(matched_taxa)
+### NOTE: more species are added to unmatched_taxa when some species are missing information
+
+indexes_of_comparable_taxa <- which(
+  trait_data$found == TRUE
+  & !is.na( trait_data$energy_source )
+  & !is.na( trait_data$nutrition_source )
+  & !is.na( trait_data$thermoregulation )
+  & !is.na( trait_data$bodymass )
+)
+
+comparable_taxa <- trait_data[ indexes_of_comparable_taxa, ]
+incomparable_taxa <- trait_data[ !(1:nrow( trait_data ) %in% indexes_of_comparable_taxa), ]
+
+comparable_taxa$species_id <- 1:nrow(comparable_taxa)
+
+rm( indexes_of_comparable_taxa )
 
 #########################################
 # Get group definitions
@@ -65,34 +89,23 @@ matched_taxa$species_id <- 1:nrow(matched_taxa)
 
 resultsDir <- 'Indicator_inputs/Serengeti/Baseline/Biomass'
 
+# TODO: @Simone, if "SimulationControlParameters.csv" can change between runs, should't it be numbered too?
+# what is the numbering system?
 groups <- get_groups(
   read.csv(file.path(resultsDir, "CohortFunctionalGroupDefinitions.csv")), # should not change between runs
-  read.csv(file.path(resultsDir,'MassBinDefinitions.csv')), # could change if user changes mass bins
+  readRDS(file.path(resultsDir,'10_baseline-1_MassBinDefinitions.rds')), # could change if user changes mass bins
   read.csv(file.path(resultsDir,'SimulationControlParameters.csv')) #Can change between runs
 )
 
 rm( resultsDir )
 
-# TODO: should change the names of the dataframe in get_groups.R once a naming convention is agreed-upon with team
-names( groups ) <- c( 
-  "heterotroph_autotroph",
-  "nutrition_source",
-  "endo_ectotherm",
-  "functional_group_index",
-  "functional_group_name",
-  "mass_lower",
-  "mass_upper",
-  "bodymass_index",
-  "group_id"   
-)
+
 
 #########################################
 # Get species and groups key (link species to groups)
 #########################################
 
-# TODO: need to implement this
-
-
+species_and_groups_key <- get_species_and_groups_key( comparable_taxa, groups )
 
 
 
@@ -107,11 +120,10 @@ names( groups ) <- c(
 
 # note -- this code will be moved into get_biomass_of_groups.R when it works
 
-load('../../../../home/stewart/Deakin/archived/3 Matching traits to Madley/3_link_species_to_functional_groups_simone/madingley_output_raw_dev.rda' )
-# the variable is called "madingley.output.raw"
+madingley_biomass <- readRDS( "Indicator_inputs/Serengeti/Baseline/Biomass/10_baseline-1_FunctionalGroupBiomass.rds" )
 
 # select only the elements of the list that we need
-madingley.output.selected <- madingley.output.raw[c(
+madingley_biomass_selected <- madingley_biomass[c(
   "Log carnivore ectotherm  biomass in mass bins ",
   "Log carnivore endotherm  biomass in mass bins ",
   "Log herbivore ectotherm  biomass in mass bins ",
@@ -162,84 +174,18 @@ log_biomass_through_time <- rbind(
 
 
 
-##########################################
+#########################################
+# Save the information
+#########################################
 
-# code below is rubbish code.
-# it's all the code from the original code.R file that needs to be incorporated into this file.
-# I'll do it :)
+# TODO
 
+#########################################
+# Get useful dataframes to check the data
+#########################################
 
+species_in_groups <- merge( species_and_groups_key, comparable_taxa ) 
+species_in_groups <- merge( species_in_groups, groups )
 
+# TODO: make one that lists the number of species that are in each "group"
 
-setwd("N:/Quantitative-Ecology/Indicators-Project/Indicator_inputs")
-# for Stewart: setwd( "/media/ndrive/Indicators-Project/Indicator_inputs")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-filename_species_list <- "mapoflife_serengeti_headerremoved.csv"
-
-file_species_list <- file.path( "species_lists", filename_species_list)
-
-# create the output folder for this species list, if it doesn't exist
-if( !dir.exists( file.path("outputs", filename_species_list) ) ) {
-  dir.create( file.path("outputs", filename_species_list), recursive = TRUE )
-}
-
-# the trait data from functionaltraits package
-file_trait_data <- file.path( "outputs", filename_species_list, "trait_data.csv" )
-file_trait_data_statistics <-  file.path( "outputs", filename_species_list, "trait_data_statistics.csv" )
-
-# the trait data after processing, used to match with Madingley outputs
-file_processed_trait_data <-  file.path( "outputs", filename_species_list, "processed_trait_data.csv" )
-
-# note that we have added this folder to the project's "ignored files" list
-# this is so that we don't upload copies of the databases, which would be breach of copyright
-file_functionaltraits_data <- file.path("outputs", "functionaltraits_data" )
-
-
-
-
-
-
-
-
-
-
-
-
-
-# make sure there is only one of each species in the list
-species_list <- unique( species_list )
-
-# use previous trait data if it is available
-if( file.exists( file_trait_data ) && file_exists( file_trait_data_statistics ) ) {
-  trait_data <- read.table( file_trait_data, header=TRUE, sep=",")  
-  trait_data_statistics <- read.table( file_trait_data_statistics, header=TRUE )
-}
-else {
-  tmp <- find_species_traits( databases, species_list )
-  trait_data <- tmp$results
-  trait_data_statistics <- tmp$statistics
-  write.csv( trait_data, file = file_trait_data )
-  write.csv( trait_data_statistics, file = file_trait_data_statistics )
-  
-}
