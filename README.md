@@ -10,8 +10,6 @@ Not finished
 - code.R
 
 #### Todo
-- Add code to calculate summary statistics, like how many functional groups had biomass per replicate; how many groups had 
-  species matched that also had biomass (per replicate), etc.
 - Get the code to work on replicates
 - Turn the code into a package
 - Refactor the code so that this repository can contain all of the adaptors for different models
