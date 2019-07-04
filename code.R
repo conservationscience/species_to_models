@@ -153,6 +153,8 @@ for( name_of_matrix in names( madingley_biomass ) ) {
   row.names(  madingley_biomass[[ name_of_matrix ]] ) <- group_ids$group_id
 }
 
+rm( group_ids )
+
 # combine them all together into a big matrix
 log_biomass_through_time <- rbind(
   madingley_biomass[["carnivore ectotherm"]],
@@ -284,6 +286,13 @@ species_that_were_modelled <- comparable_taxa[
 # groups_that_were_modelled: The groups that were modelled, with species information
 groups_that_were_modelled <- analysis_of_groups_by_species
 groups_that_were_modelled$group_modelled <- groups_that_were_modelled$group_id %in% groups_that_were_present_in_model
+
+# TODO: make this
+species_that_were_modelled <- species_in_groups[ which( species_in_groups$group_id %in% groups_that_were_present_in_model ), ]
+species_that_were_not_modelled <- species_in_groups[ which( species_in_groups$group_id %in% groups_that_were_not_present_in_model ), ]
+groups_that_were_not_modelled <- groups[ which( groups$group_id %in% groups_that_were_not_present_in_model ), ]
+groups_that_were_modelled <- groups[ which( groups$group_id %in% groups_that_were_present_in_model ), ]
+
 
 # summary_statistics
 # number_of_groups_with_biomass -- number of groups that had biomass for at least one time step in the model
