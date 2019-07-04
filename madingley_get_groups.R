@@ -14,18 +14,20 @@
 #' from the Madingley model. Where two of the original ID's have been merged, they are both included.
 #' Eg. the "group" ID 10.12.30 would represent functional groups 10 and 12, in the bodymass category of 30.
 #' 
+#' NOTE: bodymass_index starts at 0
+#' 
 #' 
 #' @param CohortFunctionalGroupDefinitions 
 #' @param MassBinDefinitions 
 #' @param SimulationControlParameters
 #' @return A datafrane with the definition of each "group".
 
-get_groups <- function( CohortFunctionalGroupDefinitions, MassBinDefinitions, SimulationControlParameters ) {
+madingley_get_groups <- function( CohortFunctionalGroupDefinitions, MassBinDefinitions, SimulationControlParameters ) {
   
   # Calculate upper massbins and join with lower bins output by model
   
   Mass.bin.upper.bound <- c(max(MassBinDefinitions) + 100000, 
-                            MassBinDefinitions$Mass.bin.lower.bound[1:77])
+                            MassBinDefinitions$Mass.bin.lower.bound[1:  length(MassBinDefinitions$Mass.bin.lower.bound)-1])
   
   massbins <- cbind(MassBinDefinitions, Mass.bin.upper.bound) %>%
     mutate(bodymass_index = c((nrow(MassBinDefinitions) - 1):0))

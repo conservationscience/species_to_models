@@ -8,7 +8,7 @@
 #' @return A datafrane with a group_id column and a species_id column, that links a species to a group. 
 #'         Note that there may be multiple species per group.
 
-get_species_and_groups_key <- function( comparable_taxa, groups ) {
+madingley_get_species_and_groups_key <- function( comparable_taxa, groups ) {
   
   species_and_groups <- data.frame(
     "group_id" = character(0),

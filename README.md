@@ -1,4 +1,4 @@
-# madingley
+# species_to_models
 
 #### WARNING
 Working:

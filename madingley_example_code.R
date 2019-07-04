@@ -1,8 +1,4 @@
 
-
-# TODO: turn this repository into a package
-# TODO: turn this file into a function that works on a single output of the madingley model
-
 library(tidyverse)
 library(plyr)
 library(dplyr)
@@ -11,30 +7,39 @@ library(purrr)
 library(packrat)
 
 library(functionaltraits)
+# NOTE: you must have the netcdf library installed to use package "ncdf4"
+library(ncdf4)
 
-# Set working directory to the ndrive 
-setwd( "/media/ndrive/Indicators-Project" )
-
-# Note, if you want to view scientific numbers as normal numbers, you can use: options("scipen" = 10)
+# change this variable to the location of the Indicators-Project directory
+IndicatorsProject <- "/media/ndrive/Indicators-Project"
 
 
-#########################################
-# Get species traits
-#########################################
+scenario_folder <- file.path(IndicatorsProject, "Serengeti", "Inputs_to_adaptor_code", "Madingley_simulation_outputs", "Baseline", "10_BuildModel" )
+model_setup_folder <- file.path(IndicatorsProject, "Serengeti", "Inputs_to_adaptor_code", "Madingley_simulation_outputs", "Baseline", "13_BuildModel", "input", "Model setup" )
 
-# select a location to store the databases files on your computer
-databases <- functionaltraits::Databases$new('/home/stewart/Downloads/testdata')
+output_folder <-  file.path(IndicatorsProject, "Serengeti", "Outputs_from_adaptor_code" )
+
+databases <- functionaltraits::Databases$new( file.path( IndicatorsProject, "functionaltraits_data" ) )
 
 databases$ready()
 
-# Choose the species list you want to load
+
+#########################################
+# Get species list
+#########################################
+
+
 species_list <- read.table( 
-  "serengeti_from_map_of_life_headerremoved.csv", 
-  sep=",", header=TRUE, stringsAsFactors=FALSE, quote="" )
+  file.path( IndicatorsProject, "Serengeti", "Inputs_to_adaptor_code", "Species_lists", "map_of_life.csv" ), 
+  sep=",", header=TRUE, stringsAsFactors=FALSE, quote=""
+)
 
 species_list <- species_list$Scientific.Name
 species_list <- unique( species_list )
 
+#########################################
+# Get species traits
+#########################################
 
 #### WARNING: This function takes about three hours or more to run.
 #### TODO: Save the output of this function so that it doesn't have to be run twice
@@ -46,10 +51,20 @@ species_list <- unique( species_list )
 ####       also find_species_traits should be renamed or something. Should be removed, and instead
 ####       an option or something in Databases should be added to check synonyms as well.
 
-trait_data <- get_trait_data( species_list, databases )
+trait_data_filename <- file.path( IndicatorsProject, "Serengeti", "Outputs_from_adaptor_code", "map_of_life", "trait_data.csv" )
+if( file.exists( trait_data_filename ) ) {
+  trait_data <- read.csv( trait_data_filename )
+} else {
+  trait_data <- get_trait_data( species_list, databases )
+  write.csv( trait_data, file = trait_data_filename )
+}
 
-# Or
-# trait_data <- read.csv( "Indicator_outputs/Serengeti/map_of_life/trait_data.csv")
+rm( trait_data_filename )
+rm( databases )
+
+
+
+
 
 
 
@@ -83,22 +98,14 @@ rm( indexes_of_comparable_taxa )
 # Get group definitions
 #########################################
 
-# Load the Madingley Output files needed (there should be five: Subset_massbins, 
-# NewCohorts, CohortFunctionalGroupDefinitions, MassBinDefinitions and 
-# SimulationControlParameters)
-
-
-resultsDir <- 'Indicator_inputs/Serengeti/Baseline/Biomass'
 
 # TODO: @Simone, if "SimulationControlParameters.csv" can change between runs, should't it be numbered too?
 # what is the numbering system?
-groups <- get_groups(
-  read.csv(file.path(resultsDir, "CohortFunctionalGroupDefinitions.csv")), # should not change between runs
-  readRDS(file.path(resultsDir,'10_baseline-1_MassBinDefinitions.rds')), # could change if user changes mass bins
-  read.csv(file.path(resultsDir,'SimulationControlParameters.csv')) #Can change between runs
+groups <- madingley_get_groups(
+  read.csv(file.path(scenario_folder, "CohortFunctionalGroupDefinitions.csv")), # should not change between runs
+  read.csv(file.path(model_setup_folder, "Ecological definition files", "MassBinDefinitions.csv") ), # could change if user changes mass bins
+  read.csv(file.path(model_setup_folder, 'SimulationControlParameters.csv')) #Can change between runs
 )
-
-rm( resultsDir )
 
 
 
@@ -106,70 +113,45 @@ rm( resultsDir )
 # Get species and groups key (link species to groups)
 #########################################
 
-species_and_groups_key <- get_species_and_groups_key( comparable_taxa, groups )
+species_and_groups_key <- madingley_get_species_and_groups_key( comparable_taxa, groups )
 
 
 
 
 
 
+#############################################
+# Iterate over each replicate, process them, and output results to output folder
+#############################################
 
-
-#########################################
-# Get biomass of groups
-#########################################
-
-# note -- this code will be moved into get_biomass_of_groups.R when it works
-
-madingley_biomass_raw <- readRDS( "Indicator_inputs/Serengeti/Baseline/Biomass/10_baseline-1_FunctionalGroupBiomass.rds" )
-
-# TODO - @Simone, how do I iterate over the replicates?
-madingley_biomass <- madingley_biomass_raw$`FunctionalGroupBiomass_baseline-1_0_Cell0.nc`
-
-# add the group_id to each row of the matrices, so it can be matched with species through get_species_and_groups_key
-# and so it can be matched to the group through get_groups
-
-for( name_of_matrix in names( madingley_biomass ) ) {
-  matrix <- madingley_biomass[[ name_of_matrix ]]
+ListMassBinsFiles <- function(resultsDir){
   
-  group_ids <- data.frame(
-    "index" = 1:(dim( matrix )[1]),
-    "group_id" = rep( NA, dim( matrix )[1])
-  )
+  files<-dir(resultsDir)
+  files<-files[grep("MassBinsOutputs",files)]
+  files<-files[grep("Cell",files)]
   
-  # the number of rows is the number of bodymass categories that were used in the model simulation
-  # it also serves as the bodymass_index
-  for( bodymass_index in 1:(dim( matrix )[1]) ) {
-    
-    group_id <-groups[ which( groups$functional_group_name == name_of_matrix & groups$bodymass_index==bodymass_index), "group_id"]
-    
-    # TODO: fix this so you don't have to check if it is empty
-    if( length( group_id ) != 0 ) {
-      group_ids[ which( group_ids$index == bodymass_index), "group_id"]  <- group_id
-    }
-    
-  }
+  return(files)
   
-  row.names(  madingley_biomass[[ name_of_matrix ]] ) <- group_ids$group_id
 }
 
-rm( group_ids )
-
-# combine them all together into a big matrix
-log_biomass_through_time <- rbind(
-  madingley_biomass[["carnivore ectotherm"]],
-  madingley_biomass[["carnivore endotherm"]],
-  madingley_biomass[["herbivore ectotherm"]],
-  madingley_biomass[["herbivore endotherm"]],
-  madingley_biomass[["omnivore ectotherm"]],
-  madingley_biomass[["omnivore endotherm"]]
-)
+massbin_files <- ListMassBinsFiles( scenario_folder )
 
 
-#### DONE. log_biomass_through_time should be the output of get_groups.R
+for( file in massbin_files ) {
+  input_file_path <- file.path( scenario_folder, file )
+  output_file_path <- file.path( output_folder, sub( ".nc", ".rds", file) )
+  
+  log_biomass_through_time <- madingley_get_biomass_of_groups( input_file_path , groups )
+  
+  saveRDS( 
+    log_biomass_through_time, 
+    file = output_file_path
+  )
+  # note -- use code below to load the matrix again
+  # read.table("test.txt",header=TRUE,row.names=1) 
+}
 
-
-
+rm( log_biomass_through_time )
 
 
 
@@ -246,7 +228,7 @@ for( group_id in groups$group_id ) {
     as.character( species_this_group_has ),
     collapse = ", "
   )
- analysis_of_groups_by_species[ which( analysis_of_groups_by_species$group_id == group_id), "number_of_species" ] <- length( species_this_group_has )
+  analysis_of_groups_by_species[ which( analysis_of_groups_by_species$group_id == group_id), "number_of_species" ] <- length( species_this_group_has )
 }
 rm( group_id )
 rm( species_this_group_has )
@@ -277,11 +259,11 @@ rm( rows_that_are_null )
 
 species_that_were_modelled <- unique( species_and_groups_key[
   which( species_and_groups_key$group_id %in% intersect( groups_that_were_present_in_model, species_and_groups_key$group_id ) ), "species_id"
-] )
+  ] )
 
 species_that_were_modelled <- comparable_taxa[ 
   which( species_that_were_modelled %in% comparable_taxa$species_id ), 
-]
+  ]
 
 # groups_that_were_modelled: The groups that were modelled, with species information
 groups_that_were_modelled <- analysis_of_groups_by_species
@@ -325,6 +307,5 @@ summary_statistics <- t( data.frame(
   
   "number_of_species_matched_and_in_group_with_biomass" = nrow( species_that_were_modelled )
 ) )
-
 
 
