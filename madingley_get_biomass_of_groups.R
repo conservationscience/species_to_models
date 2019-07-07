@@ -29,7 +29,8 @@ madingley_get_biomass_of_groups <- function( MassBinsOutputs_file_location, grou
       # load the matrix we are currently working on
       variable_name <- paste0( "Log ", nutrition_source, " ", endo_ectotherm, "  biomass in mass bins" )
       
-      print( variable_name )
+      # can use the following line to see if you have the variable names right
+      #print( variable_name )
       
       matrix <- ncvar_get( MassBinsOutputs_file_handle, MassBinsOutputs_file_handle$var[[ variable_name ]] )
       

@@ -13,7 +13,7 @@
 #' @param databases An instance of functionaltraits::Databases to search for trait information in.
 #' @return A datafrane with species trait information.
 
-get_trait_data <- function( species_list, databases ) {
+madingley_get_trait_data <- function( species_list, databases ) {
   
   if( !databases$ready() ) stop( "the databases are not ready. Try running databases$initialise() on the databases argument.")
   
