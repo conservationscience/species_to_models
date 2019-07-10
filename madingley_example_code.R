@@ -91,7 +91,7 @@ process_species_list <- function( species_list, output_folder ) {
 # Indicators-Project/[name of region]/Inputs_to_adaptor_code/Madingley_simulation_outputs/[name of scenario]/[XX]_BuildModel
 # output folder should be:
 # Indicators-Project/[name of region]/Outputs_from_adaptor_code/[name of species list file]/[name of scenario]
-process_buildmodel_folder <- function( buildmodel_folder, ouput_folder ) {
+process_buildmodel_folder <- function( buildmodel_folder, output_folder ) {
   
   # load comparable taxa
   comparable_taxa <- readRDS( file.path( dirname( output_folder ), "comparable_taxa.rds" ) )
@@ -122,15 +122,13 @@ process_buildmodel_folder <- function( buildmodel_folder, ouput_folder ) {
   saveRDS  ( species_and_groups_key, file.path( output_folder, "species_and_groups_key.rds") )
   
   
-  # Iterate over each replicate, process it, and output results to output folder
+  # Iterate over each MassBinFile, process both Abundance and Biomass data, and output results to output folder
   ListMassBinsFiles <- function(resultsDir){
-    
     files<-dir(resultsDir)
     files<-files[grep("MassBinsOutputs",files)]
     files<-files[grep("Cell",files)]
     
     return(files)
-    
   }
   
   massbin_files <- ListMassBinsFiles( replicate_folder )
@@ -138,20 +136,29 @@ process_buildmodel_folder <- function( buildmodel_folder, ouput_folder ) {
   i <- 1
   for( file in massbin_files ) {
     input_file_path <- file.path( replicate_folder, file )
-    output_file_path <- file.path( output_folder, sub( ".nc", ".rds", file) )
+    biomass_output_file_path <- file.path( output_folder, sub( ".nc", "_biomass.rds", file ) )
+    abundance_output_file_path <- file.path( output_folder, sub( ".nc", "_abundance.rds", file ) )
     
-    cat( paste0( "processing file 1 of ", length( massbin_files ), "...\n") )
+    cat( paste0( "processing file ", i, " of ", length( massbin_files ), "...\n") )
     
     log_biomass_through_time <- madingley_get_biomass_of_groups( input_file_path, groups )
+    saveRDS( log_biomass_through_time, file = biomass_output_file_path )
+    write.csv( log_biomass_through_time, file = sub( ".rds", ".csv", biomass_output_file_path ) )
     
-    saveRDS( log_biomass_through_time, file = output_file_path )
-    # we don't save a CSV file here because it would probably take a long time to save
+    # remove the large variable before loading another one. Probably doesn't increase speed,
+    # but shown here as an example of how you could keep your code using the minimum amount of 
+    # memory necessary, in case you had variables that were say 500mb-1gb
+    rm( log_biomass_through_time )
+    
+    log_abundance_through_time <- madingley_get_abundance_of_groups( input_file_path, groups )
+    saveRDS( log_abundance_through_time, file = abundance_output_file_path )
+    write.csv( log_abundance_through_time, file = sub( ".rds", ".csv", abundance_output_file_path ) )
+    rm( log_abundance_through_time )
     
     i <- i + 1
   }
   cat( "done\n" )
   rm( i )
-  rm( log_biomass_through_time )
 }
 
 

@@ -1,21 +1,21 @@
 
 
-#' Get biomass of each "group" (see madingley_get_groups.R) across each time step
+#' Get the abundance of each "group" (see madingley_get_groups.R) across each time step
 #' 
 #' 
 #' @param MassBinsOutputs The output from the Madingley model in the file MassBinsOutputs_(scenario name)_(replicate number)_(cell number).nc
-#' @return A matrix with all functional groups on the Y axis, and biomass information on the X axis. The group names are stored in row.names() of
+#' @return A matrix with all functional groups on the Y axis, and abundance information on the X axis. The group names are stored in row.names() of
 #'         the output variable.
 
-madingley_get_biomass_of_groups <- function( MassBinsOutputs_file_location, groups  ) {
+madingley_get_abundance_of_groups <- function( MassBinsOutputs_file_location, groups  ) {
   
   # target variables:
-  #  "Log omnivore endotherm  biomass in mass bins",
-  #  "Log omnivore ectotherm  biomass in mass bins",
-  #  "Log herbivore endotherm  biomass in mass bins",
-  #  "Log herbivore ectotherm  biomass in mass bins",
-  #  "Log carnivore endotherm  biomass in mass bins",
-  #  "Log carnivore ectotherm  biomass in mass bins"
+  #  "Log omnivore endotherm  abundance in mass bins",
+  #  "Log omnivore ectotherm  abundance in mass bins",
+  #  "Log herbivore endotherm  abundance in mass bins",
+  #  "Log herbivore ectotherm  abundance in mass bins",
+  #  "Log carnivore endotherm  abundance in mass bins",
+  #  "Log carnivore ectotherm  abundance in mass bins"
   
   MassBinsOutputs_file_handle <- nc_open( MassBinsOutputs_file_location )
   
@@ -28,7 +28,7 @@ madingley_get_biomass_of_groups <- function( MassBinsOutputs_file_location, grou
       # diet_type and thermoregulation_type will change for each loop run, so that all possible combinations are made
       
       # load the matrix we are currently working on
-      variable_name <- paste0( "Log ", nutrition_source, " ", endo_ectotherm, "  biomass in mass bins" )
+      variable_name <- paste0( "Log ", nutrition_source, " ", endo_ectotherm, "  abundance in mass bins" )
       
       # can use the following line to see if you have the variable names right
       #print( variable_name )
@@ -64,15 +64,14 @@ madingley_get_biomass_of_groups <- function( MassBinsOutputs_file_location, grou
     }
   }
   
-
+  
   
   # combine all matrices into one big matrix, which is more useful because we have 
   # now given each row it's unique identifier
-  log_biomass_through_time <- do.call( rbind, matrices )
+  log_abundance_through_time <- do.call( rbind, matrices )
   
-  return( log_biomass_through_time )
+  return( log_abundance_through_time )
 }
 
-  
-  
-  
+
+
