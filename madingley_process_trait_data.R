@@ -1,40 +1,23 @@
 
-# TODO: test this function to see if it works.
-# will take a long time.
-# TODO: add species_id column to output
+# TODO: fix documentation in this function
 
 #' Get a dataframe containing trait information for species
 #' 
 #' The table contains a columm, species_id, which is used as a key in `get_species_and_groups_key`.
 #' This function also processes the raw trait information from various databases to create the columns nutrition_source,
-#' bodymass, energy_source
+#' bodymass, endo_ectotherm, heterotroph_autotroph
 #' 
-#' @param species_list A character vector of the species that you want to search for.
-#' @param databases An instance of functionaltraits::Databases to search for trait information in.
+#' @param trait_data The output from the functionaltraits::find_species_traits() function
 #' @return A datafrane with species trait information.
 
-madingley_get_trait_data <- function( species_list, databases ) {
-  
-  if( !databases$ready() ) stop( "the databases are not ready. Try running databases$initialise() on the databases argument.")
-  
-  # check that all of the species names provided are unique
-  # if there are duplicate species names in the list provided, then the user must
-  # remove the duplicate names themselves. This is to ensure that this function returns the 
-  # same number of species as it was provided with (which would likely be an assumption of users)
-  
-  # TODO: this check should actually be in functionaltraits::Databases::search(), not here.
-  if( !all(!duplicated(species_list)) ) stop( "there were duplicated species names in the species list. Try removing them with unique()")
-  
-  search_results <- functionaltraits::find_species_traits( databases, species_list )
-  
-  trait_data <- search_results$results
+madingley_process_trait_data <- function( trait_data ) {
   
   processed_trait_data <- trait_data[ ,c(
     "taxa", "found", "synonyms", "accepted_name", "common_name",
     "kingdom", "phylum", "class", "order", "family", "genus" 
   )]
   
-  processed_trait_data$energy_source <- compute_column(
+  processed_trait_data$heterotroph_autotroph <- compute_column(
     input = trait_data,
     calculator = function( species ) {
       if( !is.na( species$kingdom ) ) {
@@ -53,7 +36,7 @@ madingley_get_trait_data <- function( species_list, databases ) {
     }
   )
   
-  processed_trait_data$thermoregulation = compute_column(
+  processed_trait_data$endo_ectotherm = compute_column(
     input = trait_data,
     calculator = function( species ) {
       # the rule for this code is

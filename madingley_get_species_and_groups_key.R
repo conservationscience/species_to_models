@@ -23,9 +23,9 @@ madingley_get_species_and_groups_key <- function( comparable_taxa, groups ) {
     
     species_in_this_group <- comparable_taxa[ 
       which(
-        comparable_taxa$energy_source == group$heterotroph_autotroph
+        comparable_taxa$heterotroph_autotroph == group$heterotroph_autotroph
         & comparable_taxa$nutrition_source == group$nutrition_source
-        & comparable_taxa$thermoregulation == group$endo_ectotherm
+        & comparable_taxa$endo_ectotherm == group$endo_ectotherm
         & comparable_taxa$bodymass >= group$mass_lower
         & comparable_taxa$bodymass < group$mass_upper
       ),
