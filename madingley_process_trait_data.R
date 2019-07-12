@@ -13,7 +13,7 @@
 madingley_process_trait_data <- function( trait_data ) {
   
   processed_trait_data <- trait_data[ ,c(
-    "taxa", "found", "synonyms", "accepted_name", "common_name",
+    "species", "found", "synonyms", "accepted_name", "common_name",
     "kingdom", "phylum", "class", "order", "family", "genus" 
   )]
   

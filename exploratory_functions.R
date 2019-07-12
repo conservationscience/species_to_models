@@ -1,104 +1,238 @@
 
+# species
+# groups
+# key
 
 
+# abundance
+# biomass
 
-#########################################
-# Get useful dataframes to check the data
-#########################################
-
-# Note: Each comment is the description of the data that the code below it generates
-# Note: this isn't finished yet but general structure is done
-
-
-# generate useful summary data for one replicate
-# groups - Indicators-Project/[name of region]/Outputs_from_adaptor_code/[name of species list file]/[name of scenario]/XX_BuildModel/groups.rds
-# comparable_taxa - Indicators-Project/[name of region]/Outputs_from_adaptor_code/[name of species list file]/XX_BuildModel/comparable_taxa.rds
-# species_and_groups_key - Indicators-Project/[name of region]/Outputs_from_adaptor_code/[name of species list file]/[name of scenario]/XX_BuildModel/species_and_groups_key.rds
-# log_biomass_through_time - Indicators-Project/[name of region]/Outputs_from_adaptor_code/[name of species list file]/[name of scenario]/XX_BuildModel/MassBinOutputsXXX.rds
-# output_folder - where to save the dataframes (as CSV files)
-
-
-
-
-explore_species_and_groups <- function( ) {
-  # species_in_groups: A full dataframe containing species and group information, together
-  species_in_groups <- merge( species_and_groups_key, comparable_taxa ) 
-  species_in_groups <- merge( species_in_groups, groups )
-  saveresult( species_in_groups, "species_in_groups" )
+#' Find which species are present in each group.
+#' 
+#' Trait information is included. You can subset the resulting dataframe to make it more readable according to your needs.
+#' 
+#' @param species 
+#' @param groups 
+#' @param key
+#' @return A dataframe with group and species information, sorted by group_id
+explore_which_species_are_in_each_group <- function( species, groups, key ) {
+  
+  result <- merge( key, groups, by.x = "group_id", by.y = "group_id", all.y = TRUE, sort = TRUE )
+  result <- merge( result, species, by.x = "species_id", by.y = "species_id", all.x = TRUE, sort = FALSE ) 
+  result <- result[ order(result$group_id), ]
+  
+  return( result )
 }
 
-explore_species_in_multiple_groups <- function () {
-  # species_in_multiple_groups: Species that were assigned to more than one group
-  # Note: Species should never be assigned to more than one group, so the in_multiple_groups columns should be all FALSE
-  species_in_multiple_groups <- comparable_taxa
-  species_in_multiple_groups$groups <- rep( NA, nrow(species_in_multiple_groups) )
-  species_in_multiple_groups$number_of_groups <- rep( NA, nrow(species_in_multiple_groups) )
-  
-  for( species_id in species_in_multiple_groups$species_id ) {
-    groups_this_species_is_in <- species_and_groups_key[ which( species_and_groups_key$species_id == species_id ), "group_id"]
-    species_in_multiple_groups[ which( species_in_multiple_groups$species_id == species_id), "groups" ] <- paste(
-      groups_this_species_is_in,
-      collapse = ", "
-    )
-    
-    species_in_multiple_groups[ which( species_in_multiple_groups$species_id == species_id), "number_of_groups" ] <- length( groups_this_species_is_in )
-    
-  }
-  rm( species_id )
-  rm( groups_this_species_is_in )
-  
-  saveresult( species_in_multiple_groups, "species_in_multiple_groups_ZERO" )
-  
-  # TODO: add warning
-}
 
-explore <- function() {
-  # species_not_assigned_to_any_group: Species that were not assigned to any group
-  # NOTE - exclusive of incomparable_taxa
-  # NOTE - because we already removed incomparable_taxa, I guess all species should be assigned a group. 
-  
-  species_not_assigned_to_any_group <- species_in_multiple_groups[ which(species_in_multiple_groups$number_of_groups == 0), ]
-}
+#' Find the number of species in each group
+#' 
+#' @param species 
+#' @param groups 
+#' @param key
+#' @return A dataframe with group information, including a new column, number_of_species
+explore_number_of_species_in_each_group <- function( species, groups, key ) {
 
-explore <- function(  ) {
-  # number_of_species_in_each_group: Groups that had multiple species assigned to them, and groups that had no species assigned to them
-  number_of_species_in_each_group <- groups
-  number_of_species_in_each_group$species <- rep( NA, nrow(number_of_species_in_each_group) )
-  number_of_species_in_each_group$number_of_species <- rep( NA, nrow(number_of_species_in_each_group) )
+  result <- groups
+  result$species <- rep( NA, nrow(result) )
+  result$number_of_species <- rep( NA, nrow(result) )
+  result$species_names <- rep( NA, nrow(result) )
   
   for( group_id in groups$group_id ) {
-    species_this_group_has <- species_and_groups_key[ which( species_and_groups_key$group_id == group_id ), "species_id"]
-    number_of_species_in_each_group[ which( number_of_species_in_each_group$group_id == group_id), "species" ] <- paste(
+    
+    # find species IDs for this group
+    species_this_group_has <- key[ which( key$group_id == group_id ), "species_id"]
+    result[ which( result$group_id == group_id), "species" ] <- paste(
       as.character( species_this_group_has ),
       collapse = ", "
     )
-    number_of_species_in_each_group[ which( number_of_species_in_each_group$group_id == group_id), "number_of_species" ] <- length( species_this_group_has )
+    
+    # calculate number of species for this group
+    result[ which( result$group_id == group_id), "number_of_species" ] <- length( species_this_group_has )
+    
+    # get the names of the species
+    names_of_species_that_are_in_this_group <- species[ species$species_id %in% species_this_group_has, "species"]
+    result[ which( result$group_id == group_id), "species_names" ] <- paste(
+      as.character( species_this_group_has ),
+      collapse = ", "
+    )
   }
-  rm( group_id )
-  rm( species_this_group_has )
   
-  saveresult( number_of_species_in_each_group, "number_of_species_in_each_group" )
+  return( result )
 }
 
-explore <- function(  ) {
-  # groups_with_no_biomass: A summary of the "groups" that had no biomass in the model simulation
-  # groups_with_biomass: A summary of the "groups" that did have biomass in the model simulation
-  rows_that_are_null <- apply( log_biomass_through_time, 1, function( row ) {
+
+#' Find groups that no species matched to
+#' 
+#' @param species 
+#' @param groups 
+#' @param key
+#' @return Dataframe from explore_number_of_species_in_each_group(), where number_of_species == 0
+explore_groups_without_species <- function( species, groups, key ) {
+  
+  result <- explore_number_of_species_in_each_group( species, groups, key )
+  result <- result[ which( result$number_of_species == 0 ), ]
+  
+  return( result )
+}
+
+#' Find groups that at least one species matched to
+#' 
+#' @param species 
+#' @param groups 
+#' @param key
+#' @return Dataframe from explore_number_of_species_in_each_group(), where number_of_species > 0
+explore_groups_with_species <- function( species, groups, key ) {
+  
+  result <- explore_number_of_species_in_each_group( species, groups, key )
+  result <- result[ which( result$number_of_species > 0 ), ]
+  
+  return( result )
+}
+
+#' Find the number of groups each species matched to
+#' 
+#' @param species 
+#' @param groups 
+#' @param key
+#' @return A dataframe with species and trait information, including a new column, number_of_groups
+explore_number_of_groups_each_species_matched_to <- function( species, groups, key ) {
+  
+  result <- species
+  result$groups <- rep( NA, nrow(result) )
+  result$number_of_groups <- rep( NA, nrow(result) )
+  
+  for( species_id in species$species_id ) {
+    group_ids <- key[ which( key$species_id == species_id ), "group_id"]
+    result[ which( result$species_id == species_id), "groups" ] <- paste(
+      as.character( group_ids ),
+      collapse = ", "
+    )
+    result[ which( result$species_id == species_id), "number_of_groups" ] <- length( group_ids )
+    
+  }
+  
+  return( result )
+}
+
+#' Find the species that were not matched to any groups
+#' 
+#' @param species 
+#' @param groups 
+#' @param key
+#' @return Dataframe from explore_number_of_groups_each_species_matched_to(), where number_of_groups == 0
+explore_unmatched_species <- function( species, groups, key ) {
+
+  result <- explore_number_of_groups_each_species_matched_to( species, groups, key )
+  result <- result[ which( result$number_of_groups == 0 ), ]
+  
+  return( result )
+}
+
+#' Find the species that matched to a groups
+#' 
+#' @param species 
+#' @param groups 
+#' @param key
+#' @return Dataframe from explore_number_of_groups_each_species_matched_to(), where number_of_groups > 0
+explore_matched_species <- function( species, groups, key ) {
+  
+  result <- explore_number_of_groups_each_species_matched_to( species, groups, key )
+  result <- result[ which( result$number_of_groups > 0 ), ]
+  
+  return( result )
+}
+
+#' Get a summary of the data
+#' 
+#' @param species 
+#' @param groups 
+#' @param key
+#' @return Summary dataframe
+explore_summary <- function( species, groups, key ) {
+  
+  return( t( data.frame(
+    "number_of_groups" = nrow( groups ),
+    "number_of_groups_with_species" = nrow( explore_groups_with_species( species, groups, key ) ),
+    "number_of_groups_without_species" = nrow( explore_groups_without_species( species, groups, key ) ),
+    
+    "number_of_species" = nrow( species ),
+    "number_of_species_matched_to_a_group" = nrow( explore_matched_species( species, groups, key ) ),
+    "number_of_species_not_matched_to_a_group" = nrow( explore_unmatched_species( species, groups, key ) )
+    
+    
+    
+    
+    #"number_of_groups_that_species_matched_to" = 
+    
+    # "number_of_groups_with_matched_species" = length(unique(species_and_groups_key$group_id)),
+    # "number_of_groups_with_biomass_and_matched_species" = length( intersect( groups_with_biomass, species_and_groups_key$group_id ) ),
+    # 
+    # "number_of_species_total" = nrow( trait_data ),
+    # "number_of_uncomparable_species" = nrow( incomparable_taxa ),
+    # "number_of_comparable_species" = nrow( comparable_taxa ),
+    # 
+    # "number_species_matched_to_a_group" = length( unique( species_and_groups_key$species_id ) ),
+    # "number_of_species_matched_to_multiple_groups_ZERO" = nrow( species_in_multiple_groups[ which(species_in_multiple_groups$number_of_groups > 1), ] ),
+    # "number_of_species_not_matched_to_any_group_ZERO" = nrow( species_not_assigned_to_any_group ),
+    # 
+    # "number_of_species_matched_and_in_group_with_biomass" = nrow( species_that_were_modelled )
+  ) ) )
+  
+}
+
+
+
+
+### Warning -- this function is specific to the Madingley model at the moment
+# madingley_biomass is the madingley biomass matrix
+explore_groups_with_biomass <- function( groups, madingley_biomass  ) {
+  rows_that_are_null <- apply( madingley_biomass, 1, function( row ) {
     # if the row is full of dud values, return FALSE to not include that row
     
     #print( typeof( row ) )
     
-    if( all( row == rep( -9999, dim(log_biomass_through_time)[2]) ) ) return( TRUE )
+    if( all( row == rep( -9999, dim(madingley_biomass)[2]) ) ) return( TRUE )
     else return( FALSE )
   } )
   
-  groups_with_no_biomass <- row.names( log_biomass_through_time[rows_that_are_null, ] )
-  groups_with_biomass <- row.names( log_biomass_through_time[!rows_that_are_null, ] )
-  rm( rows_that_are_null )
+  groups_with_biomass <- row.names( madingley_biomass[!rows_that_are_null, ] )
   
-  saveresult( groups[ which( groups$group_id %in% groups_with_no_biomass ), ], "groups_with_no_biomass" )
-  saveresult( groups[ which( groups$group_id %in% groups_with_biomass ), ], "groups_with_biomass" )
+  return( groups[ which( groups$group_id %in% groups_with_biomass ), ] )
 }
+
+explore_groups_without_biomass <- function( groups, madingley_biomass  ) {
+  rows_that_are_null <- apply( madingley_biomass, 1, function( row ) {
+    if( all( row == rep( -9999, dim(madingley_biomass)[2]) ) ) return( TRUE )
+    else return( FALSE )
+  } )
+  
+  groups_with_no_biomass <- row.names( madingley_biomass[rows_that_are_null, ] )
+  
+  return( groups[ which( groups$group_id %in% groups_with_no_biomass ), ] )
+}
+
+
+##### example code
+  
+  
+example_species_in_groups_with_biomass <- function( species, groups, key, madingley_biomass ) {
+  groups_with_biomass <- explore_groups_with_biomass( groups, madingley_biomass )
+  
+  number_of_species_in_each_group <- explore_number_of_species_in_each_group( species, groups_with_biomass, key )
+  
+  return( number_of_species_in_each_group )
+}
+
+
+
+
+
+##### warning -- I have not properly tested the functions below
+
+
+
+
 
 explore <- function(  ) {
   # species_that_were_modelled: The species that were modelled
@@ -123,42 +257,26 @@ explore <- function(  ) {
   
 }
 
-explore_summary <- function(  ) {
-  # summary_statistics
-  # number_of_groups_with_biomass -- number of groups that had biomass for at least one time step in the model
-  # number_of_groups_with_matched_species -- number of groups that had species match to them
-  # number_of_groups_with_biomass_and_matched_species -- number of groups that appeared in the model AND had species match to them
+
+get_all_exploratory_functions <- function() {
+  loaded_functions <- ls.str()
   
-  # number_of_species_total -- total number of species that were initially given (perhaps excluding duplicate species)
-  # number_of_uncomparable_species -- number of species that we were missing information for, or that were not recognised by the taxonomic database
-  # number_of_comparable_species -- number of species that we have enough data to match them to a group
+  # TODO -- remove the explore_summary function
   
-  # number_species_matched_to_a_group -- number of species that were successfully matched to a group. SHOULD EQUAL number_of_comparable_species
-  # number_of_species_matched_to_multiple_groups_ZERO -- number of species that were matched to multiple groups. SHOULD EQUAL 0
-  # number_of_species_not_matched_to_any_group_ZERO -- number of species that were not matched to any group. SHOULD EQUAL 0
+  explore_functions <- loaded_functions[ which( grepl( "explore_", loaded_functions, fixed=TRUE )) ]
   
-  # number_of_species_matched_and_in_group_with_biomass -- number of species that were both matched to a group, and the group they were matched to had biomass in at least one time step
-  
-  summary_statistics <- t( data.frame(
-    "number_of_groups" = nrow( groups ),
-    "number_of_groups_with_biomass" = length( groups_with_biomass ),
-    "number_of_groups_with_matched_species" = length(unique(species_and_groups_key$group_id)),
-    "number_of_groups_with_biomass_and_matched_species" = length( intersect( groups_with_biomass, species_and_groups_key$group_id ) ),
-    
-    "number_of_species_total" = nrow( trait_data ),
-    "number_of_uncomparable_species" = nrow( incomparable_taxa ),
-    "number_of_comparable_species" = nrow( comparable_taxa ),
-    
-    "number_species_matched_to_a_group" = length( unique( species_and_groups_key$species_id ) ),
-    "number_of_species_matched_to_multiple_groups_ZERO" = nrow( species_in_multiple_groups[ which(species_in_multiple_groups$number_of_groups > 1), ] ),
-    "number_of_species_not_matched_to_any_group_ZERO" = nrow( species_not_assigned_to_any_group ),
-    
-    "number_of_species_matched_and_in_group_with_biomass" = nrow( species_that_were_modelled )
-  ) )
+  return( explore_functions )
 }
 
-
-explore_save_all <- function( groups, comparable_taxa, species_and_groups_key, log_biomass_through_time, output_folder ) {
+save_all_exploratory_results <- function( groups, comparable_taxa, species_and_groups_key, log_biomass_through_time, output_folder ) {
+  
+  
+  result <- list()
+  
+  for( function_name in get_all_explore_functions() ) {
+    function_handle <- get( function_name )
+    result[ function_name ] <- function_handle( species, groups, key )
+  }
   
   saveresult <- function( result, filename ) {
     cat( paste0( "saving ", filename, " to ", file.path( output_folder, paste0( filename, ".csv" ) ), "\n" ) )
