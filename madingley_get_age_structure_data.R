@@ -14,7 +14,6 @@
 get_age_structure_data <- function(indicators_project, location, scenario, simulation){
   
   require(tidyverse)
-  #source( "C:\\Users\\ssteven\\Desktop\\Serengeti-analysis\\python-madingley\\Serengeti-Indicators\\ProcessOutputFunctions.R")
   
   # Get locations and file paths and simulation details
   
@@ -108,15 +107,6 @@ rm(born, reproduced, born_reproduced)
 growth_name <- results_files[str_detect(results_files, "Growth")]
 growth <- as.data.frame(read_tsv(file.path(model_results,growth_name, sep ="")))
 
-# Get Maturity file (also huge)
-
-maturity_name <- results_files[str_detect(results_files, "Maturity")]
-maturity <- as.data.frame(read_tsv(file.path(model_results,maturity_name, sep ="")))
-
-oldnames <- names(maturity)
-newnames <- str_replace(oldnames," ", "_")
-names(maturity) <- newnames
-
 # Identify adult and juvenile cohorts and modify the data to contain only
 # data for adults
 
@@ -135,7 +125,7 @@ all_ages_data <- growth[ , c("ID", "time_step", "Current_body_mass_g",
 
 
 
-rm(maturity, growth, new_cohorts)
+rm(growth, new_cohorts)
 
 # Turn the juvenile abundance and biomass into zeroes instead of subsetting, so
 # we keep all time-steps (otherwise it drops any timesteps without adult cohorts
@@ -285,6 +275,8 @@ saveRDS( massbin_long_all, file = file.path(output_folder,paste(scenario,
 write.csv( massbin_long_all, file = file.path(output_folder,paste(scenario, 
                                     simulation_number, "massbin_long_all.csv", sep = "_" )))
 
+print("saved massbin data all ages (1/7 files)")
+
 abundance_list <- flatten(lapply(functional_group_data_all, filter_by_pattern, 
                                  pattern = "abundance_wide"))
 abundance_all <- do.call(rbind,abundance_list)
@@ -295,6 +287,8 @@ saveRDS( abundance_all, file = file.path(output_folder,paste(scenario,
 write.csv( abundance_all, file = file.path(output_folder,paste(scenario, 
                               simulation_number, "abundance.csv", sep = "_" )))
 
+print("saved abundance data all ages (2/7 files)")
+
 biomass_list <- flatten(lapply(functional_group_data_all, filter_by_pattern, 
                                pattern = "biomass_wide"))
 biomass_all <- do.call(rbind,biomass_list)
@@ -304,6 +298,8 @@ saveRDS( biomass_all, file = file.path(output_folder,paste(scenario,
                                        simulation_number, "biomass", sep = "_" )))
 write.csv( biomass_all, file = file.path(output_folder,paste(scenario,
                                   simulation_number, "biomass.csv", sep = "_" )))
+
+print("saved biomass data all ages (3/7 files)")
 
 # Get and save adult massbin, abundance and biomass data
 
@@ -319,6 +315,8 @@ saveRDS( adult_massbin_long_all, file = file.path(output_folder,paste(scenario,
 write.csv( adult_massbin_long_all, file = file.path(output_folder,paste(scenario, 
                                                                   simulation_number, "adult_massbin_long.csv", sep = "_" )))
 
+print("saved adult massbin data (4/7 files)")
+
 adult_abundance_list <- flatten(lapply(adult_functional_group_data, filter_by_pattern, 
                                  pattern = "abundance_wide"))
 adult_abundance_all <- do.call(rbind,adult_abundance_list)
@@ -329,6 +327,8 @@ saveRDS( adult_abundance_all, file = file.path(output_folder,paste(scenario,
 write.csv( adult_abundance_all, file = file.path(output_folder,paste(scenario, 
                                                                simulation_number, "adult_abundance.csv", sep = "_" )))
 
+print("saved adult abundance data (5/7 files)")
+
 adult_biomass_list <- flatten(lapply(adult_functional_group_data, filter_by_pattern, 
                                pattern = "biomass_wide"))
 adult_biomass_all <- do.call(rbind,adult_biomass_list)
@@ -337,7 +337,9 @@ rm(adult_biomass_list)
 saveRDS( adult_biomass_all, file = file.path(output_folder,paste(scenario, 
                                                            simulation_number, "adult_biomass", sep = "_" )))
 write.csv( adult_biomass_all, file = file.path(output_folder,paste(scenario,
-                                                             simulation_number, "adult_biomass.csv", sep = "_" )))
+                                                            simulation_number, "adult_biomass.csv", sep = "_" )))
+
+print("saved adult biomass data (6/7 files)")
 
 ## Get and save generation length data
 
@@ -352,6 +354,8 @@ saveRDS( generation_length_all, file = file.path(output_folder,paste(scenario,
                                       sep = "_" )))
 write.csv( generation_length_all, file = file.path(output_folder,paste(scenario, 
                       simulation_number, "generation_lengths.csv", sep = "_" )))
+
+print("saved generation length data (7/7 files)")
 
 print("Warning: this function is still being tested, treat outputs with caution")
 
