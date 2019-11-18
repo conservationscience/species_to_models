@@ -85,14 +85,14 @@ born_reproduced <- merge(born, reproduced, by.x = "offspring_cohort_ID",
 
 ## Calculate generation length for each cohort
 
-generation_length <- born_reproduced %>%
+generation_length_df <- born_reproduced %>%
                      group_by(offspring_cohort_ID) %>%
                      dplyr::filter(time_step.y == min(time_step.y)) %>%
                      dplyr::mutate(gen.length = (time_step.y - time_step.x)/12) # Convert from months to years
 
 ## Rename columns
 
-names(generation_length) <- c("ID", "functionalgroup","adult_mass",
+names(generation_length_df) <- c("ID", "functionalgroup","adult_mass",
                              "birth_timestep","maturity_timestep",
                              "generation_length")
 
@@ -114,7 +114,7 @@ all_ages_data <- growth[ , c("ID", "time_step", "Current_body_mass_g",
                              "functional_group","abundance")] %>%
   merge(new_cohorts[ , c("ID","adult_mass")],
         by = "ID", all = TRUE) %>%
-  merge(generation_length[c("ID", "generation_length")], all = TRUE) %>%
+  merge(generation_length_df[c("ID", "generation_length")], all = TRUE) %>%
   dplyr::mutate(adult = ifelse(Current_body_mass_g >= adult_mass, TRUE, FALSE)) %>%
   dplyr::mutate(biomass = Current_body_mass_g * abundance) %>%
   dplyr::mutate(new_functional_group = ifelse((functional_group == 14 | functional_group == 17), "14.17",
@@ -241,11 +241,9 @@ generation_lengths <- data %>%
                                  dig.lab = 11)) %>% #suppress scientific notation
   dplyr::group_by(massbins, new_functional_group) %>%
   dplyr::summarise(gen_length_mean = mean(generation_length, 
-                                          na.rm = TRUE)) %>%
-  # dplyr::summarise(gen_length_max = max(generation_length, 
-  #                                         na.rm = TRUE)) %>%
-  # dplyr::summarise(gen_length_min = min(generation_length, 
-  #                                         na.rm = TRUE)) %>%
+                                          na.rm = TRUE),
+                   gen_length_max = max(generation_length, na.rm = TRUE),
+                   gen_length_min = min(generation_length, na.rm = TRUE)) %>%
   merge(bodymass_bins[ , c("massbins","bodymass_bin_index")],
         by = "massbins", all = TRUE) %>%
   dplyr::mutate(new_functional_group = fg) %>%
