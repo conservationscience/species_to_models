@@ -6,12 +6,10 @@
 #' @returns saves massbin, abundance, biomass and generation lengths to adaptor
 #' output folder
 
-## TODO: This function doesn't work properly right now for the adult data because
-## it removes timesteps with no biomass. Priority for fixing. Fix this and add 
-## massbin_long, abundance and biomass outputs for adults data as well
 ## TODO: Add max and min generation length columns
 ## TODO: Work out if we can only read in certain columns of the large .txt files, 
 ## and also use ff package to reduce memory use of these big matrices
+
 
 get_age_structure_data <- function(indicators_project, location, scenario, simulation){
   
@@ -57,12 +55,14 @@ get_age_structure_data <- function(indicators_project, location, scenario, simul
 new_cohorts_name <- results_files[str_detect(results_files, "NewCohorts")]
 new_cohorts <- read_tsv(file.path(model_results,new_cohorts_name, sep =""))
 
+
 oldnames <- names(new_cohorts)
 newnames <- str_replace(oldnames," ", "_")
 names(new_cohorts) <- newnames
 oldnames <- names(new_cohorts)
 newnames <- str_replace(oldnames," ", "_")
 names(new_cohorts) <- newnames
+new_cohorts <- new_cohorts %>% dplyr::rename(ID = parent_cohort_IDs)
 
 ## Calculate generation lengths
 ## TODO: CHECK THIS IS CORRECT (I think it is better than using maturity b/c that signals when
@@ -76,13 +76,13 @@ born <- new_cohorts %>%
 ## Get timestep each cohort reaches reproductive maturity (check this is right)
 
 reproduced <- new_cohorts %>%
-              dplyr::select(parent_cohort_IDs, time_step) 
+              dplyr::select(ID, time_step) 
 
 ## Merge to create dataframe with timestep born, timestep reached maturity for
 ## each cohort
 
 born_reproduced <- merge(born, reproduced, by.x = "offspring_cohort_ID", 
-                        by.y = "parent_cohort_IDs")
+                        by.y = "ID")
 
 ## Calculate generation length for each cohort
 
@@ -99,7 +99,7 @@ names(generation_length) <- c("ID", "functionalgroup","adult_mass",
 
 # Remove big objects
 
-rm(new_cohorts, born, reproduced, born_reproduced)
+rm(born, reproduced, born_reproduced)
 
 
 # Get growth file (this is massive, might be a problem when processing multiple
@@ -117,26 +117,36 @@ oldnames <- names(maturity)
 newnames <- str_replace(oldnames," ", "_")
 names(maturity) <- newnames
 
-# Identify adult and juvenile cohorts and subset the data to contain only
+# Identify adult and juvenile cohorts and modify the data to contain only
 # data for adults
 
 all_ages_data <- growth[ , c("ID", "time_step", "Current_body_mass_g",
-                          "functional_group","abundance")] %>%
-  merge(maturity[ , c("ID","adult_mass")],
+                             "functional_group","abundance")] %>%
+  merge(new_cohorts[ , c("ID","adult_mass")],
         by = "ID", all = TRUE) %>%
   merge(generation_length[c("ID", "generation_length")], all = TRUE) %>%
   dplyr::mutate(adult = ifelse(Current_body_mass_g >= adult_mass, TRUE, FALSE)) %>%
   dplyr::mutate(biomass = Current_body_mass_g * abundance) %>%
   dplyr::mutate(new_functional_group = ifelse((functional_group == 14 | functional_group == 17), "14.17",
-                                  ifelse((functional_group == 13 | functional_group == 16), "13.16",
-                                    ifelse((functional_group == 15 | functional_group == 18), "15.18", # combine iteroparous and semelparous ectotherms
-                functional_group)))) %>%
+                                              ifelse((functional_group == 13 | functional_group == 16), "13.16",
+                                                     ifelse((functional_group == 15 | functional_group == 18), "15.18", # combine iteroparous and semelparous ectotherms
+                                                            functional_group)))) %>%
   dplyr::select(-functional_group)
 
-rm(maturity, growth)
 
-adult_data <-  all_ages_data %>% filter(adult == TRUE)
 
+rm(maturity, growth, new_cohorts)
+
+# Turn the juvenile abundance and biomass into zeroes instead of subsetting, so
+# we keep all time-steps (otherwise it drops any timesteps without adult cohorts
+# and you end up with different time series for different groups)
+
+adult_data <- all_ages_data %>%
+              dplyr::mutate(adult_abundance = ifelse(adult == TRUE, abundance, 0)) %>%
+              dplyr::mutate(adult_biomass = ifelse(adult == TRUE, biomass, 0)) %>%
+              dplyr::select(-c(abundance, biomass)) %>%
+              dplyr::rename(abundance = adult_abundance, biomass = adult_biomass)
+              
 # Function to sort cohorts into bodymass bins
 
 # Get bodymass bins lower bounds
@@ -180,20 +190,21 @@ massbin_breaks <- c(breaks[,1])
 fg <- max(data$new_functional_group, na.rm = TRUE)
   
 massbin_data <- data %>%
-                dplyr::select(time_step, Current_body_mass_g, new_functional_group, 
-                             abundance, biomass) %>%
-                dplyr::group_by(massbins = cut(Current_body_mass_g, 
-                                                    breaks = massbin_breaks, 
-                                                    na.rm = FALSE,
-                                                    dig.lab = 11)) %>%
-                dplyr::group_by(massbins, time_step) %>%
-                dplyr::summarise(abundance_sum = sum(abundance),
-                                        biomass_sum = sum(biomass)) %>%
-                merge(bodymass_bins[ , c("massbins","bodymass_bin_index")],
-                                    by = "massbins", all = TRUE) %>%
-                dplyr::mutate(new_functional_group = fg) %>%
-                dplyr::mutate(functional_group_index = paste(new_functional_group,
-                                                            bodymass_bin_index, sep = ".")) 
+  dplyr::select(time_step, Current_body_mass_g, new_functional_group, 
+                abundance, biomass, adult) %>%
+  dplyr::group_by(massbins = cut(Current_body_mass_g, 
+                                 breaks = massbin_breaks, 
+                                 na.rm = FALSE,
+                                 dig.lab = 11)) %>%
+  dplyr::group_by(massbins, time_step) %>%
+  dplyr::summarise(abundance_sum = sum(abundance),
+                   biomass_sum = sum(biomass)) %>%
+  merge(bodymass_bins[ , c("massbins","bodymass_bin_index")],
+        by = "massbins", all = TRUE) %>%
+  dplyr::mutate(new_functional_group = fg) %>%
+  dplyr::mutate(functional_group_index = paste(new_functional_group,
+                                               bodymass_bin_index, sep = ".")) 
+
 
 abundance_wide <- massbin_data %>%
                   dplyr::select(-biomass_sum) %>%
@@ -262,9 +273,9 @@ return(output)
 
 }
 
-functional_group_data <- lapply(all_ages_list, group_by_massbin, breaks = breaks)
+functional_group_data_all <- lapply(all_ages_list, group_by_massbin, breaks = breaks)
 
-massbin_long_list <- flatten(lapply(functional_group_data, filter_by_pattern, 
+massbin_long_list <- flatten(lapply(functional_group_data_all, filter_by_pattern, 
                                     pattern = "massbin_data_long"))
 massbin_long_all <- do.call(rbind,massbin_long_list)
 rm(massbin_long_list)
@@ -274,7 +285,7 @@ saveRDS( massbin_long_all, file = file.path(output_folder,paste(scenario,
 write.csv( massbin_long_all, file = file.path(output_folder,paste(scenario, 
                                     simulation_number, "massbin_long_all.csv", sep = "_" )))
 
-abundance_list <- flatten(lapply(functional_group_data, filter_by_pattern, 
+abundance_list <- flatten(lapply(functional_group_data_all, filter_by_pattern, 
                                  pattern = "abundance_wide"))
 abundance_all <- do.call(rbind,abundance_list)
 rm(abundance_list)
@@ -284,7 +295,7 @@ saveRDS( abundance_all, file = file.path(output_folder,paste(scenario,
 write.csv( abundance_all, file = file.path(output_folder,paste(scenario, 
                               simulation_number, "abundance.csv", sep = "_" )))
 
-biomass_list <- flatten(lapply(functional_group_data, filter_by_pattern, 
+biomass_list <- flatten(lapply(functional_group_data_all, filter_by_pattern, 
                                pattern = "biomass_wide"))
 biomass_all <- do.call(rbind,biomass_list)
 rm(biomass_list)
@@ -294,7 +305,44 @@ saveRDS( biomass_all, file = file.path(output_folder,paste(scenario,
 write.csv( biomass_all, file = file.path(output_folder,paste(scenario,
                                   simulation_number, "biomass.csv", sep = "_" )))
 
-generation_length_list <- flatten(lapply(functional_group_data, 
+# Get and save adult massbin, abundance and biomass data
+
+adult_functional_group_data <- lapply(adult_list, group_by_massbin, breaks = breaks)
+
+adult_massbin_long_list <- flatten(lapply(adult_functional_group_data, filter_by_pattern, 
+                                    pattern = "massbin_data_long"))
+adult_massbin_long_all <- do.call(rbind,adult_massbin_long_list)
+rm(adult_massbin_long_list)
+
+saveRDS( adult_massbin_long_all, file = file.path(output_folder,paste(scenario, 
+                                                                simulation_number, "adult_massbin_long", sep = "_" )))
+write.csv( adult_massbin_long_all, file = file.path(output_folder,paste(scenario, 
+                                                                  simulation_number, "adult_massbin_long.csv", sep = "_" )))
+
+adult_abundance_list <- flatten(lapply(adult_functional_group_data, filter_by_pattern, 
+                                 pattern = "abundance_wide"))
+adult_abundance_all <- do.call(rbind,adult_abundance_list)
+rm(adult_abundance_list)
+
+saveRDS( adult_abundance_all, file = file.path(output_folder,paste(scenario, 
+                                                             simulation_number, "adult_abundance", sep = "_" )))
+write.csv( adult_abundance_all, file = file.path(output_folder,paste(scenario, 
+                                                               simulation_number, "adult_abundance.csv", sep = "_" )))
+
+adult_biomass_list <- flatten(lapply(adult_functional_group_data, filter_by_pattern, 
+                               pattern = "biomass_wide"))
+adult_biomass_all <- do.call(rbind,adult_biomass_list)
+rm(adult_biomass_list)
+
+saveRDS( adult_biomass_all, file = file.path(output_folder,paste(scenario, 
+                                                           simulation_number, "adult_biomass", sep = "_" )))
+write.csv( adult_biomass_all, file = file.path(output_folder,paste(scenario,
+                                                             simulation_number, "adult_biomass.csv", sep = "_" )))
+
+## Get and save generation length data
+
+
+generation_length_list <- flatten(lapply(functional_group_data_all, 
                               filter_by_pattern, pattern = "generation_lengths"))
 generation_length_all <- do.call(rbind,generation_length_list)
 rm(generation_length_list)
@@ -307,6 +355,15 @@ write.csv( generation_length_all, file = file.path(output_folder,paste(scenario,
 
 print("Warning: this function is still being tested, treat outputs with caution")
 
-print(paste("Processing of files from simulation number", simulation_number, "in the", scenario, "scenario directory complete", sep = " "))
+print(paste("Processing of files from simulation number", 
+simulation_number, "in the", scenario, "scenario directory complete", sep = " "))
 
 }
+
+
+indicators_project <- "N:/Quantitative-Ecology/Indicators-Project"
+location <- 'Serengeti'
+scenario <- 'Test_runs'
+simulation <- 'aa_BuildModel/'
+
+system.time(get_age_structure_data(indicators_project, location, scenario, simulation))
