@@ -3,6 +3,8 @@
 #' @param location string that denotes the directory of the location you want to process eg 'Serengeti'
 #' @param scenario string that denotes which impact directory you want to look in eg "Baseline"
 #' @param simulation name of the BuildModel directory you want to process eg  "001_BuildModel/"
+#' @param remove_juveniles string, can be "yes" or "no" to determine
+#' which age structures are saved (adults only, or all ages)
 #' @returns saves massbin, abundance, biomass and generation lengths to adaptor
 #' output folder
 
@@ -11,7 +13,7 @@
 ## and also use ff package to reduce memory use of these big matrices
 
 
-get_age_structure_data <- function(indicators_project, location, scenario, simulation){
+get_age_structure_data <- function(indicators_project, location, scenario, simulation, remove_juveniles){
   
   require(tidyverse)
   
@@ -261,7 +263,11 @@ return(output)
 
 }
 
+
+
 functional_group_data_all <- lapply(all_ages_list, group_by_massbin, breaks = breaks)
+
+if (remove_juveniles == "no") {
 
 massbin_long_list <- flatten(lapply(functional_group_data_all, filter_by_pattern, 
                                     pattern = "massbin_data_long"))
@@ -298,6 +304,10 @@ write.csv( biomass_all, file = file.path(output_folder,paste(scenario,
                                   simulation_number, "biomass.csv", sep = "_" )))
 
 print("saved biomass data all ages (3/7 files)")
+
+} else if (remove_juveniles == "yes") {
+
+  print("saving adult data only")
 
 # Get and save adult massbin, abundance and biomass data
 
@@ -339,6 +349,8 @@ write.csv( adult_biomass_all, file = file.path(output_folder,paste(scenario,
 
 print("saved adult biomass data (6/7 files)")
 
+}
+
 ## Get and save generation length data
 
 
@@ -363,9 +375,3 @@ simulation_number, "in the", scenario, "scenario directory complete", sep = " ")
 }
 
 
-indicators_project <- "N:/Quantitative-Ecology/Indicators-Project"
-location <- 'Serengeti'
-scenario <- 'Test_runs'
-simulation <- 'aa_BuildModel/'
-
-system.time(get_age_structure_data(indicators_project, location, scenario, simulation))
