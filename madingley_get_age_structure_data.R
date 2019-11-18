@@ -5,15 +5,18 @@
 #' @param simulation name of the BuildModel directory you want to process eg  "001_BuildModel/"
 #' @param remove_juveniles string, can be "yes" or "no" to determine
 #' which age structures are saved (adults only, or all ages)
+#' @param burnin integer denoting burnin time (in months not years)
 #' @returns saves massbin, abundance, biomass and generation lengths to adaptor
 #' output folder
 
-## TODO: Add max and min generation length columns
 ## TODO: Work out if we can only read in certain columns of the large .txt files, 
 ## and also use ff package to reduce memory use of these big matrices
 
+## TODO: Incorporate the plot_functional_groups function currently sitting in 
+## prepare_data_functions.R
 
-get_age_structure_data <- function(indicators_project, location, scenario, simulation, remove_juveniles){
+
+get_age_structure_data <- function(indicators_project, location, scenario, simulation, remove_juveniles, burnin){
   
   require(tidyverse)
   
@@ -279,6 +282,8 @@ saveRDS( massbin_long_all, file = file.path(output_folder,paste(scenario,
 write.csv( massbin_long_all, file = file.path(output_folder,paste(scenario, 
                                     simulation_number, "massbin_long_all.csv", sep = "_" )))
 
+rm(massbin_long_all)
+
 print("saved massbin data all ages (1/7 files)")
 
 abundance_list <- flatten(lapply(functional_group_data_all, filter_by_pattern, 
@@ -291,6 +296,8 @@ saveRDS( abundance_all, file = file.path(output_folder,paste(scenario,
 write.csv( abundance_all, file = file.path(output_folder,paste(scenario, 
                               simulation_number, "abundance.csv", sep = "_" )))
 
+rm(abundance_all)
+
 print("saved abundance data all ages (2/7 files)")
 
 biomass_list <- flatten(lapply(functional_group_data_all, filter_by_pattern, 
@@ -302,6 +309,8 @@ saveRDS( biomass_all, file = file.path(output_folder,paste(scenario,
                                        simulation_number, "biomass", sep = "_" )))
 write.csv( biomass_all, file = file.path(output_folder,paste(scenario,
                                   simulation_number, "biomass.csv", sep = "_" )))
+
+rm(biomass_all)
 
 print("saved biomass data all ages (3/7 files)")
 
@@ -322,6 +331,8 @@ saveRDS( adult_massbin_long_all, file = file.path(output_folder,paste(scenario,
                                                                 simulation_number, "adult_massbin_long", sep = "_" )))
 write.csv( adult_massbin_long_all, file = file.path(output_folder,paste(scenario, 
                                                                   simulation_number, "adult_massbin_long.csv", sep = "_" )))
+
+rm(adult_massbin_long_all)
 
 print("saved adult massbin data (4/7 files)")
 
@@ -347,6 +358,8 @@ saveRDS( adult_biomass_all, file = file.path(output_folder,paste(scenario,
 write.csv( adult_biomass_all, file = file.path(output_folder,paste(scenario,
                                                             simulation_number, "adult_biomass.csv", sep = "_" )))
 
+rm(adult_biomass_all)
+
 print("saved adult biomass data (6/7 files)")
 
 }
@@ -365,13 +378,70 @@ saveRDS( generation_length_all, file = file.path(output_folder,paste(scenario,
 write.csv( generation_length_all, file = file.path(output_folder,paste(scenario, 
                       simulation_number, "generation_lengths.csv", sep = "_" )))
 
+rm(functional_group_data_all)
+
 print("saved generation length data (7/7 files)")
+
+plot_functional_groups <- function(data, burnin) {
+
+# Plot abundance per functional group
+
+remove_burn_in <- function(data, burnin) {
+  
+  data[,(burnin + 1):ncol(data)]
+}
+  
+data <- as.data.frame(data)
+is.na(data) <- !data
+
+new_data <- remove_burn_in(data, burnin) %>%
+  dplyr::mutate(functional_group_index = row.names(.)) %>%
+  dplyr::mutate(total_abundance = rowMeans(select(.,-functional_group_index), na.rm = TRUE)) %>%
+  dplyr::mutate(functional_group = substr(functional_group_index, 
+                                          start = 1, stop = 2)) %>%
+  dplyr::mutate(bodymass_bin_index = str_sub(functional_group_index,-2, -1)) %>%
+  #dplyr::mutate(bodymass_bin_index = str_remove(bodymass_bin_index, ".")) %>%
+  dplyr::select(functional_group, bodymass_bin_index, functional_group_index, total_abundance) %>%
+  dplyr::mutate(functional_group_name = ifelse(functional_group == 10, "herbivorous endotherms",
+                                        ifelse(functional_group == 11, "carnivorous  endotherms",
+                                        ifelse(functional_group == 12, "omnivorous  endotherms",
+                                        ifelse(functional_group == 13, "herbivorous ectotherms", # combine iteroparous and semelparous ectotherms
+                                        ifelse(functional_group == 14, "carnivorous ectotherms",
+                                        ifelse(functional_group == 15, "omnivorous ectotherms", "NA")))))))
+
+plotName <- paste(scenario, "_", simulation_number, "_functional_group_bodymass_distribution",".tiff",sep="")
+tiff(file = (paste(output_folder,plotName, sep = "/")), units ="in", width=6, height=3, res=50)
+
+
+plot <- ggplot(data = new_data, aes( x = bodymass_bin_index, 
+                                     y = total_abundance, col = functional_group_name)) +
+  geom_bar(stat = 'identity') +
+  labs(x = "bodymass bins", y = "total_modelled_abundance") +
+  facet_wrap( ~ functional_group_name, nrow = 3)
+
+plot
+
+dev.off()
+
+}
+
+plot_functional_groups(adult_abundance_all, burnin)
+
+rm(new_data, plot)
 
 print("Warning: this function is still being tested, treat outputs with caution")
 
 print(paste("Processing of files from simulation number", 
 simulation_number, "in the", scenario, "scenario directory complete", sep = " "))
 
+
 }
 
+indicators_project <- "N:/Quantitative-Ecology/Indicators-Project"
+location <- "Serengeti"
+scenario <- "Test_runs"
+simulation <- "aa_BuildModel/"
+remove_juveniles <- "yes"
+burnin <- 6
 
+system.time(get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin))
