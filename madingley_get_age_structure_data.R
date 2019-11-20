@@ -9,12 +9,25 @@
 #' @returns saves massbin, abundance, biomass and generation lengths to adaptor
 #' output folder
 
-## TODO: Work out if we can only read in certain columns of the large .txt files, 
-## and also use ff package to reduce memory use of these big matrices
-
-## TODO: Incorporate the plot_functional_groups function currently sitting in 
-## prepare_data_functions.R
-
+#' TODO: Make this function remove burnin timesteps (for efficiency).  This will
+#' require updates to other indicator code though.
+#' 
+#' TODO: At the moment the generation lengths data requires group_by_massbin to be
+#' used on the all ages data, even if we have specified we want to remove juveniles.
+#' This means the apply needs to be run twice and adds a lot of time.  Find a way
+#' to see if can just use adult data, or separate gen lengths function from the
+#' group_by_massbin function
+#' 
+#' TODO: Work out if we can only read in certain columns of the large .txt files, 
+#' and also use ff package to reduce memory use of these big matrices.  
+#' the section that creates all_ages_data is VERRRY SLOW, so start there I think
+#' 
+#' TODO: Add a mean parent age variable to the generation lengths output
+#' 
+#' TODO: Important.  When producing massbin data, we need rows for when
+#' groups have disappeared.  Should be something like 1 functional_group_index *
+#' missing timesteps added (preferably to massbin_data_long), so the rest works
+#' as it is now.  Also remove existing attempts to add missing_timestep_df
 
 get_age_structure_data <- function(indicators_project, location, scenario, simulation, remove_juveniles, burnin){
   
@@ -69,8 +82,6 @@ names(new_cohorts) <- newnames
 new_cohorts <- new_cohorts %>% dplyr::rename(ID = parent_cohort_IDs)
 
 ## Calculate generation lengths
-## TODO: CHECK THIS IS CORRECT (I think it is better than using maturity b/c that signals when
-## their current weight reaches adult size, not necessarily when they reproduce)
 
 ## Get timestep each cohort was born
 
@@ -120,15 +131,16 @@ all_ages_data <- growth[ , c("ID", "time_step", "Current_body_mass_g",
   merge(new_cohorts[ , c("ID","adult_mass")],
         by = "ID", all = TRUE) %>%
   merge(generation_length_df[c("ID", "generation_length")], all = TRUE) %>%
+# filter(time_step >= burnin) %>%
   dplyr::mutate(adult = ifelse(Current_body_mass_g >= adult_mass, TRUE, FALSE)) %>%
   dplyr::mutate(biomass = Current_body_mass_g * abundance) %>%
   dplyr::mutate(new_functional_group = ifelse((functional_group == 14 | functional_group == 17), "14.17",
-                                              ifelse((functional_group == 13 | functional_group == 16), "13.16",
-                                                     ifelse((functional_group == 15 | functional_group == 18), "15.18", # combine iteroparous and semelparous ectotherms
-                                                            functional_group)))) %>%
+                                       ifelse((functional_group == 13 | functional_group == 16), "13.16",
+                                       ifelse((functional_group == 15 | functional_group == 18), "15.18", # combine iteroparous and semelparous ectotherms
+                                       functional_group)))) %>%
   dplyr::select(-functional_group)
 
-
+print("cohort data processed")
 
 rm(growth, new_cohorts)
 
@@ -137,10 +149,11 @@ rm(growth, new_cohorts)
 # and you end up with different time series for different groups)
 
 adult_data <- all_ages_data %>%
-              dplyr::mutate(adult_abundance = ifelse(adult == TRUE, abundance, 0)) %>%
-              dplyr::mutate(adult_biomass = ifelse(adult == TRUE, biomass, 0)) %>%
+              dplyr::mutate(adult_abundance = ifelse(adult == TRUE, abundance, NA)) %>%
+              dplyr::mutate(adult_biomass = ifelse(adult == TRUE, biomass, NA)) %>%
               dplyr::select(-c(abundance, biomass)) %>%
-              dplyr::rename(abundance = adult_abundance, biomass = adult_biomass)
+              dplyr::rename(abundance = adult_abundance, biomass = adult_biomass) 
+              # %>% dplyr::mutate(occupancy = ifelse(is.na(abundance), "FALSE", "TRUE"))
               
 # Function to sort cohorts into bodymass bins
 
@@ -174,31 +187,102 @@ bodymass_bins <- as.data.frame(cbind(bodymass_bins_lower, bodymass_bins_upper)) 
 all_ages_list <- split(all_ages_data, all_ages_data$new_functional_group)
 adult_list <- split(adult_data, adult_data$new_functional_group)
 
+# Get true duration of the simulation
+
+sim_parameters <- read.csv(file.path(model_inputs, '/Model setup/SimulationControlParameters.csv'))
+sim_parameters$Parameters <- as.character(sim_parameters$Parameter)
+sim_parameters$Value <- as.character(sim_parameters$Value)
+
+duration_months <- as.numeric(sim_parameters %>% 
+                                dplyr:: filter(Parameter == "Length of simulation (years)")%>%
+                                dplyr:: select(Value)) * 12
+
 
 # Group cohorts into massbins and sum their abundance and biomass per timestep
 
+#data <- adult_list[[2]]
 
-group_by_massbin <- function(data, breaks) {
+
+group_by_massbin <- function(data, breaks, duration_months) {
   
 massbin_breaks <- c(breaks[,1])
-  
+
 fg <- max(data$new_functional_group, na.rm = TRUE)
   
-massbin_data <- data %>%
-  dplyr::select(time_step, Current_body_mass_g, new_functional_group, 
-                abundance, biomass, adult) %>%
-  dplyr::group_by(massbins = cut(Current_body_mass_g, 
-                                 breaks = massbin_breaks, 
-                                 na.rm = FALSE,
-                                 dig.lab = 11)) %>%
-  dplyr::group_by(massbins, time_step) %>%
-  dplyr::summarise(abundance_sum = sum(abundance),
-                   biomass_sum = sum(biomass)) %>%
-  merge(bodymass_bins[ , c("massbins","bodymass_bin_index")],
-        by = "massbins", all = TRUE) %>%
-  dplyr::mutate(new_functional_group = fg) %>%
-  dplyr::mutate(functional_group_index = paste(new_functional_group,
-                                               bodymass_bin_index, sep = ".")) 
+extant_massbin_data <- data %>%
+                dplyr::select(time_step, Current_body_mass_g, new_functional_group, 
+                              abundance, biomass, adult) %>%
+                dplyr::group_by(massbins = cut(Current_body_mass_g, 
+                                               breaks = massbin_breaks, 
+                                               na.rm = FALSE,
+                                               dig.lab = 11)) %>%
+                dplyr::group_by(massbins, time_step) %>%
+                dplyr::summarise(abundance_sum = sum(abundance),
+                                 biomass_sum = sum(biomass)) %>%
+                merge(bodymass_bins[ , c("massbins","bodymass_bin_index")],
+                      by = "massbins", all = TRUE) %>%
+                dplyr::mutate(new_functional_group = fg) %>%
+                dplyr::mutate(functional_group_index = paste(new_functional_group,
+                                                             bodymass_bin_index, sep = ".")) %>% 
+                dplyr::mutate(occupancy = ifelse(is.na(abundance_sum), "FALSE", "TRUE"))
+
+# Testing - this section checks if any previously extant functional groups have
+# become extinct, and adds zero abundance for remaining model timesteps (otherwise
+# the output data just stops at whatever timestep they become extinct.
+# This feels super clunky, think it could be done a lot better, maybe with the
+# madingley simulation output for extinctions
+
+correct_timesteps <- c(1:duration_months)
+
+existing_timesteps <- unique(na.omit(extant_massbin_data$time_step))
+missing_timesteps <- correct_timesteps[!(correct_timesteps %in% existing_timesteps)]
+occupied_massbins <- unique(extant_massbin_data$functional_group_index[extant_massbin_data$occupancy == TRUE])
+
+empty_df <- extant_massbin_data %>%
+            dplyr::filter(occupancy == TRUE) %>%
+            dplyr::mutate(abundance_sum = 0, biomass_sum = 0, time_step = NA) %>%
+            dplyr::distinct(.)
+
+single_empty_df_list <- split(empty_df, empty_df$functional_group_index)
+
+empty_df_list <- list()
+
+for (i in seq_along(single_empty_df_list)) {
+
+tmp1 <- do.call("rbind", replicate(length(missing_timesteps), single_empty_df_list[[i]], simplify = FALSE))
+
+tmp2 <- tmp1 %>%
+         dplyr::mutate(time_step = missing_timesteps)
+
+empty_df_list[[i]] <- tmp2
+
+}
+
+extinct_massbin_data <- do.call("rbind", empty_df_list)
+
+massbin_data <- rbind(extant_massbin_data, extinct_massbin_data)
+massbin_data <- massbin_data %>%
+                dplyr::select(-occupancy)
+
+rm(extant_massbin_data, extinct_massbin_data)
+
+# column_dimension <- dim(massbin_data)[2]
+#    
+# #missing_timestep_df <- data.frame(matrix(, nrow=length(missing_timesteps), ncol=column_dimension))
+# missing_timestep_df <- data.frame(time_steps = missing_timesteps)
+# head(missing_timestep_df)
+# 
+# fg_index <- rep(unique(massbin_data$functional_group_index),length.out=length(missing_timesteps))
+# missing_timestep_df <- cbind(missing_timestep_df, fg_index)
+#    
+# names(missing_timestep_df) <- c("time_steps", "functional_group_index")
+# #   
+# x <- missing_timestep_df %>%
+#        mutate(abundance_sum = 0) %>%
+#        mutate(biomass_sum = 0) %>%
+#        merge(massbin_data[ , c("bodymass_bin_index", "new_functional_group","massbins")],
+#        by = "functional_group_index", all = TRUE)
+  
 
 
 abundance_wide <- massbin_data %>%
@@ -262,13 +346,16 @@ output <- list(massbin_data, abundance_matrix_final, biomass_matrix_final, gener
 
 names(output) <- c("massbin_data_long", "abundance_wide", "biomass_wide", "generation_lengths")
 
+print(paste("functional group", fg, "processed", sep = " "))
+
 return(output)
+
+rm(output)
 
 }
 
-
-
-functional_group_data_all <- lapply(all_ages_list, group_by_massbin, breaks = breaks)
+functional_group_data_all <- lapply(all_ages_list, group_by_massbin, 
+                             breaks = breaks, duration_months = duration_months)
 
 if (remove_juveniles == "no") {
 
@@ -320,7 +407,7 @@ print("saved biomass data all ages (3/7 files)")
 
 # Get and save adult massbin, abundance and biomass data
 
-adult_functional_group_data <- lapply(adult_list, group_by_massbin, breaks = breaks)
+adult_functional_group_data <- lapply(adult_list, group_by_massbin, breaks = breaks, duration_months = duration_months)
 
 adult_massbin_long_list <- flatten(lapply(adult_functional_group_data, filter_by_pattern, 
                                     pattern = "massbin_data_long"))
