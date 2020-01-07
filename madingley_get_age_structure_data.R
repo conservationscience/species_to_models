@@ -22,8 +22,6 @@
 #' and also use ff package to reduce memory use of these big matrices.  
 #' the section that creates all_ages_data is VERRRY SLOW, so start there I think
 #' 
-#' TODO: Add a mean parent age variable to the generation lengths output
-#' 
 #' TODO: Important.  When producing massbin data, we need rows for when
 #' groups have disappeared.  Should be something like 1 functional_group_index *
 #' missing timesteps added (preferably to massbin_data_long), so the rest works
