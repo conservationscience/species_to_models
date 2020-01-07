@@ -29,6 +29,17 @@
 #' missing timesteps added (preferably to massbin_data_long), so the rest works
 #' as it is now.  Also remove existing attempts to add missing_timestep_df
 
+## For testing:
+# 
+# indicators_project <- "N:/Quantitative-Ecology/Indicators-Project"
+# location <- "Serengeti"
+# scenario <- "Test_runs"
+# simulation <- "aa_BuildModel"
+# remove_juveniles <- "yes"
+# burnin <- 1 * 12
+# get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin)
+# 
+
 get_age_structure_data <- function(indicators_project, location, scenario, simulation, remove_juveniles, burnin){
   
   require(tidyverse)
@@ -101,16 +112,17 @@ born_reproduced <- merge(born, reproduced, by.x = "offspring_cohort_ID",
 
 ## Calculate generation length for each cohort
 
-generation_length_df <- born_reproduced %>%
-                     group_by(offspring_cohort_ID) %>%
-                     dplyr::filter(time_step.y == min(time_step.y)) %>%
-                     dplyr::mutate(gen.length = (time_step.y - time_step.x)/12) # Convert from months to years
+generation_length_df <- born_reproduced %>% 
+                        group_by(offspring_cohort_ID) %>% 
+                        summarize(generation_length = mean(time_step.y)/12) %>% # Where gen_length is mean age of reproduction for that cohort in years
+                        merge(.,born_reproduced[ , c("offspring_cohort_ID","functional_group","adult_mass")],
+                            by = "offspring_cohort_ID", all = TRUE) %>%
+                        unique()
 
 ## Rename columns
 
-names(generation_length_df) <- c("ID", "functionalgroup","adult_mass",
-                             "birth_timestep","maturity_timestep",
-                             "generation_length")
+names(generation_length_df) <- c("ID", "generation_length",
+                                 "functionalgroup","adult_mass")
 
 # Remove big objects
 
