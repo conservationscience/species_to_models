@@ -184,7 +184,7 @@ adult_data <- all_ages_data %>%
 
 # Get bodymass bins lower bounds
 
-options(scipen = 999) # supress scientific notation
+options(scipen = 999) # suppress scientific notation
 
 breaks <- read.csv(file.path(model_inputs, '/Model setup/Ecological definition files/MassBinDefinitions.csv'))
 
@@ -193,12 +193,13 @@ breaks <- read.csv(file.path(model_inputs, '/Model setup/Ecological definition f
 bodymass_bins_upper <- breaks[-79,]
 bodymass_bins_lower <- breaks[-1,]
 
-# Combine to produce column called 'massbins' that we can use to merge other data later
+# Combine to produce column called 'massbins' that matches the format of 
+# model output massbin columns, so we can use it to merge other data later
 
 bodymass_bins <- as.data.frame(cbind(bodymass_bins_lower, bodymass_bins_upper)) %>%
                  mutate(temp = paste(bodymass_bins_lower, bodymass_bins_upper,  
                                          sep = ",")) %>%
-                 mutate (massbins = paste("(", temp, "]", sep = "")) %>%
+                 mutate(massbins = paste("(", temp, "]", sep = "")) %>%
                  mutate(bodymass_bin_index = c(78:1)) %>%
                  dplyr::select(-temp)
 
@@ -547,5 +548,10 @@ simulation_number, "in the", scenario, "scenario directory complete", sep = " ")
 
 # Test function
 
+<<<<<<< HEAD
 # get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin)
+=======
+system.time(get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin))
+
+>>>>>>> bfd96158d308d121cd8bf3082eeb48c770a06f96
 
