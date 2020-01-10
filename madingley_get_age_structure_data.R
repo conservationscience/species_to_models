@@ -29,14 +29,13 @@
 
 ## For testing:
 # 
-# indicators_project <- "N:/Quantitative-Ecology/Indicators-Project"
-# location <- "Serengeti"
-# scenario <- "Test_runs"
-# simulation <- "aa_BuildModel"
-# remove_juveniles <- "yes"
-# burnin <- 1 * 12
-# get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin)
-# 
+indicators_project <- "N:/Quantitative-Ecology/Indicators-Project"
+location <- "Serengeti"
+scenario <- "Test_runs"
+simulation <- "aa_BuildModel"
+remove_juveniles <- "yes"
+burnin <- 1 * 12
+
 
 get_age_structure_data <- function(indicators_project, location, scenario, simulation, remove_juveniles, burnin){
   
@@ -75,11 +74,13 @@ get_age_structure_data <- function(indicators_project, location, scenario, simul
     
   }
 
-  # Get the new_cohorts data from which we can calculate age at first reproduction,
+  # Get the new_cohorts data from which we can calculate mean age of parents,
   # aka generation length
   
 new_cohorts_name <- results_files[str_detect(results_files, "NewCohorts")]
-new_cohorts <- read_tsv(file.path(model_results,new_cohorts_name, sep =""))
+new_cohorts <- read_tsv(file.path(model_results,new_cohorts_name, sep =""), 
+                        col_types = list(Latitude = col_skip(), # Skip the columns you don't need
+                                         Longitude = col_skip()))
 
 
 oldnames <- names(new_cohorts)
@@ -131,7 +132,14 @@ rm(born, reproduced, born_reproduced)
 # replicates)
 
 growth_name <- results_files[str_detect(results_files, "Growth")]
-growth <- as.data.frame(read_tsv(file.path(model_results,growth_name, sep ="")))
+growth <- as.data.frame(read_tsv(file.path(model_results,growth_name, sep =""),
+                        col_types = list(Latitude = col_skip(), # Skip the columns you don't need
+                                         Longitude = col_skip(),
+                                         growth_g = col_skip(),
+                                         metabolism_g = col_skip(),
+                                         predation_g = col_skip(),
+                                         herbivory_g = col_skip()
+                                         )))
 
 # Identify adult and juvenile cohorts and modify the data to contain only
 # data for adults
@@ -169,7 +177,7 @@ adult_data <- all_ages_data %>%
 
 # Get bodymass bins lower bounds
 
-options(scipen = 999) # supress scientific notation
+options(scipen = 999) # suppress scientific notation
 
 breaks <- read.csv(file.path(model_inputs, '/Model setup/Ecological definition files/MassBinDefinitions.csv'))
 
@@ -178,12 +186,13 @@ breaks <- read.csv(file.path(model_inputs, '/Model setup/Ecological definition f
 bodymass_bins_upper <- breaks[-79,]
 bodymass_bins_lower <- breaks[-1,]
 
-# Combine to produce column called 'massbins' that we can use to merge other data later
+# Combine to produce column called 'massbins' that matches the format of 
+# model output massbin columns, so we can use it to merge other data later
 
 bodymass_bins <- as.data.frame(cbind(bodymass_bins_lower, bodymass_bins_upper)) %>%
                  mutate(temp = paste(bodymass_bins_lower, bodymass_bins_upper,  
                                          sep = ",")) %>%
-                 mutate (massbins = paste("(", temp, "]", sep = "")) %>%
+                 mutate(massbins = paste("(", temp, "]", sep = "")) %>%
                  mutate(bodymass_bin_index = c(78:1)) %>%
                  dplyr::select(-temp)
 
@@ -529,3 +538,9 @@ simulation_number, "in the", scenario, "scenario directory complete", sep = " ")
 
 
 }
+
+# Test function
+
+system.time(get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin))
+
+
