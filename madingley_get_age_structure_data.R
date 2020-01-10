@@ -29,14 +29,13 @@
 
 ## For testing:
 # 
-# indicators_project <- "N:/Quantitative-Ecology/Indicators-Project"
-# location <- "Serengeti"
-# scenario <- "Test_runs"
-# simulation <- "aa_BuildModel"
-# remove_juveniles <- "yes"
-# burnin <- 1 * 12
-# get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin)
-# 
+indicators_project <- "N:/Quantitative-Ecology/Indicators-Project"
+location <- "Serengeti"
+scenario <- "Test_runs"
+simulation <- "aa_BuildModel"
+remove_juveniles <- "yes"
+burnin <- 1 * 12
+
 
 get_age_structure_data <- function(indicators_project, location, scenario, simulation, remove_juveniles, burnin){
   
@@ -75,18 +74,18 @@ get_age_structure_data <- function(indicators_project, location, scenario, simul
     
   }
 
-  # Get the new_cohorts data from which we can calculate age at first reproduction,
+  # Get the new_cohorts data from which we can calculate mean age of parents,
   # aka generation length
   
 new_cohorts_name <- results_files[str_detect(results_files, "NewCohorts")]
-new_cohorts <- read_tsv(file.path(model_results,new_cohorts_name, sep =""))
+new_cohorts <- read_tsv(file.path(model_results,new_cohorts_name, sep =""), 
+                        col_types = list(Latitude = col_skip(), # Skip the columns you don't need
+                                         Longitude = col_skip()))
 
+# replace spaces in column names with underscores
 
 oldnames <- names(new_cohorts)
-newnames <- str_replace(oldnames," ", "_")
-names(new_cohorts) <- newnames
-oldnames <- names(new_cohorts)
-newnames <- str_replace(oldnames," ", "_")
+newnames <- str_replace_all(oldnames," ", "_")
 names(new_cohorts) <- newnames
 new_cohorts <- new_cohorts %>% dplyr::rename(ID = parent_cohort_IDs)
 
@@ -95,25 +94,35 @@ new_cohorts <- new_cohorts %>% dplyr::rename(ID = parent_cohort_IDs)
 ## Get timestep each cohort was born
 
 born <- new_cohorts %>%
-        dplyr::select(offspring_cohort_ID, functional_group, adult_mass, time_step) 
+        dplyr::select(offspring_cohort_ID, 
+                      functional_group, 
+                      adult_mass, time_step) 
 
-## Get timestep each cohort reaches reproductive maturity (check this is right)
+## Get timestep for each year each cohort reproduces
 
 reproduced <- new_cohorts %>%
               dplyr::select(ID, time_step) 
 
-## Merge to create dataframe with timestep born, timestep reached maturity for
-## each cohort
+## Merge to create dataframe with timestep born, timestep of reproduction (so
+# there can be only one timestep born per cohort, but multiple timesteps of reproduction)
+# Not all cohorts born also reproduce, which is why this creates a df with fewer
+# observations
 
 born_reproduced <- merge(born, reproduced, by.x = "offspring_cohort_ID", 
                         by.y = "ID")
 
-## Calculate generation length for each cohort
+born_reproduced <- born %>%
+                   merge(reproduced, by.x = "offspring_cohort_ID", 
+                         by.y = "ID") %>%
+                   dplyr::mutate(age_reproduced_years = (time_step.y - time_step.x)/12)
+
+## Calculate generation length for each cohort (mean age of reproduction in years)
 
 generation_length_df <- born_reproduced %>% 
                         group_by(offspring_cohort_ID) %>% 
-                        summarize(generation_length = mean(time_step.y)/12) %>% # Where gen_length is mean age of reproduction for that cohort in years
-                        merge(.,born_reproduced[ , c("offspring_cohort_ID","functional_group","adult_mass")],
+                        summarize(generation_length = mean(age_reproduced_years)) %>% # Where gen_length is mean age of reproduction for that cohort in years
+                        merge(.,born_reproduced[ , c("offspring_cohort_ID",
+                              "functional_group","adult_mass")],
                             by = "offspring_cohort_ID", all = TRUE) %>%
                         unique()
 
@@ -131,13 +140,19 @@ rm(born, reproduced, born_reproduced)
 # replicates)
 
 growth_name <- results_files[str_detect(results_files, "Growth")]
-growth <- as.data.frame(read_tsv(file.path(model_results,growth_name, sep ="")))
+growth <- as.data.frame(read_tsv(file.path(model_results,growth_name, sep =""),
+                        col_types = list(Latitude = col_skip(), # Skip the columns you don't need
+                                         Longitude = col_skip(),
+                                         growth_g = col_skip(),
+                                         metabolism_g = col_skip(),
+                                         predation_g = col_skip(),
+                                         herbivory_g = col_skip()
+                                         )))
 
 # Identify adult and juvenile cohorts and modify the data to contain only
 # data for adults
 
-all_ages_data <- growth[ , c("ID", "time_step", "Current_body_mass_g",
-                             "functional_group","abundance")] %>%
+all_ages_data <- growth %>%
   merge(new_cohorts[ , c("ID","adult_mass")],
         by = "ID", all = TRUE) %>%
   merge(generation_length_df[c("ID", "generation_length")], all = TRUE) %>%
@@ -154,7 +169,7 @@ print("cohort data processed")
 
 rm(growth, new_cohorts)
 
-# Turn the juvenile abundance and biomass into zeroes instead of subsetting, so
+# Turn the juvenile abundance and biomass into NA instead of removing them, so
 # we keep all time-steps (otherwise it drops any timesteps without adult cohorts
 # and you end up with different time series for different groups)
 
@@ -529,3 +544,8 @@ simulation_number, "in the", scenario, "scenario directory complete", sep = " ")
 
 
 }
+
+# Test function
+
+# get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin)
+
