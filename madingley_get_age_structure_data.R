@@ -249,10 +249,11 @@ duration_months <- as.numeric(sim_parameters %>%
 #' @returns wide format dataframe where rows are functional groups and columns
 #' are timesteps, and long format dataframe of generation length per functional group
 
-# 
+# To test function
+
 # data <- adult_list[[2]]
 # 
-# data <- all_ages_list[[2]]
+# data <- all_ages_list[[1]]
 
 
 group_by_massbin <- function(data, breaks, duration_months) {
@@ -271,7 +272,7 @@ bodymass_bins <- as.data.frame(cbind(bodymass_bins_lower, bodymass_bins_upper)) 
   mutate(temp = paste(bodymass_bins_lower, bodymass_bins_upper,  
                       sep = ",")) %>%
   mutate(massbins = paste("(", temp, "]", sep = "")) %>%
-  mutate(bodymass_bin_index = c(78:1)) %>%
+  mutate(bodymass_bin_index = c(77:0)) %>%
   dplyr::select(-temp)
 
 # Get functional group name
@@ -284,8 +285,8 @@ extant_massbin_data <- data %>%
                 dplyr::select(time_step, Current_body_mass_g, new_functional_group,
                               abundance, biomass, adult) %>%
                 dplyr::group_by(massbins = cut(Current_body_mass_g,
-                                               breaks = massbin_breaks,
-                                               include.lowest = FALSE,
+                                               breaks = bodymass_bins_upper,
+                                               include.lowest = TRUE,
                                                na.rm = FALSE,
                                                dig.lab = 11)) %>%
                 dplyr::group_by(massbins, time_step) %>%
@@ -373,7 +374,7 @@ abundance_wide <- massbin_data %>%
                                  massbins, bodymass_bin_index,
                                  functional_group_index))
 
-abundance_matrix_temp <- as.matrix(abundance_wide[,-c(1,2)]) # convert to matrix
+abundance_matrix_temp <- as.matrix(abundance_wide) # convert to matrix
 
 abundance_matrix_final <- ifelse(abundance_matrix_temp >= 1,
                                  log(abundance_matrix_temp),0) # convert log values
@@ -390,7 +391,7 @@ biomass_wide <- massbin_data %>%
                                      massbins, bodymass_bin_index,
                                      functional_group_index))
   
-biomass_matrix_temp <- as.matrix(biomass_wide[,-c(1,2)])
+biomass_matrix_temp <- as.matrix(biomass_wide)
     
 biomass_matrix_final <- ifelse(biomass_matrix_temp >= 1,
                                log(biomass_matrix_temp),0)
