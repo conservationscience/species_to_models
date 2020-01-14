@@ -152,24 +152,29 @@ growth <- as.data.frame(read_tsv(file.path(model_results,growth_name, sep =""),
 # Identify adult and juvenile cohorts and modify the data to contain only
 # data for adults
 
-
-#' TODO: Some cohorts lose biomass over time.  This can result in them having a
-#' current bodymass below the adult bodymass. Need to fix the conditional rule
-#' for assigning 'adult' below to reflect this 
-
 all_ages_data <- growth %>%
   merge(new_cohorts[ , c("offspring_cohort_ID","ID","adult_mass")],
         by.x = "ID", by.y = "offspring_cohort_ID", all = TRUE) %>%
   merge(generation_length_df[c("ID", "generation_length")], all = TRUE) %>%
 # filter(time_step >= burnin) %>%
-  dplyr::mutate(adult = ifelse(Current_body_mass_g >= adult_mass, TRUE, FALSE)) %>%
+  dplyr::mutate(tmp1 = ifelse(Current_body_mass_g >= adult_mass, TRUE, FALSE)) %>%
   dplyr::mutate(biomass = Current_body_mass_g * abundance) %>%
   dplyr::mutate(new_functional_group = ifelse((functional_group == 14 | functional_group == 17), "14.17",
                                        ifelse((functional_group == 13 | functional_group == 16), "13.16",
                                        ifelse((functional_group == 15 | functional_group == 18), "15.18", # combine iteroparous and semelparous ectotherms
                                        functional_group)))) %>%
   dplyr::select(-functional_group) %>%
-  dplyr::rename(parent_cohort_ID = ID.y)
+  dplyr::filter(!is.na(time_step)) %>% # Removes cohorts that were born but died straight away
+  dplyr::rename(parent_cohort_ID = ID.y) %>% 
+  group_by(ID) %>% # Identify adults, including those whose bodymass have risen above then dropped below the adult mass threshold
+  arrange(ID, time_step) %>%
+  mutate(first = as.numeric(row_number() == min(row_number()[tmp1 == TRUE]))) %>%
+  mutate(tmp2 = cumsum(first)) %>%
+  mutate(adult = ifelse(tmp2 == 1, TRUE, FALSE)) %>%
+  ungroup() %>%
+  dplyr::select(-c(tmp1, tmp2, first))  
+
+
 
 print("cohort data processed")
 
@@ -247,7 +252,7 @@ duration_months <- as.numeric(sim_parameters %>%
 # 
 # data <- adult_list[[2]]
 # 
-# data <- all_ages_list[[2]]
+data <- all_ages_list[[2]]
 
 
 group_by_massbin <- function(data, breaks, duration_months) {
@@ -507,6 +512,10 @@ print("saved biomass data all ages (3/7 files)")
 rm(biomass_all)
 
 # Tidy and plot data
+#' TODO: Remove the 'remove burnin' parts of the code after everything else is fixed
+#' and we only read in the rows we want from the .txt files
+
+
 remove_burn_in <- function(df, burnin) {
   
   df[,(burnin + 1):ncol(df)]
@@ -621,10 +630,10 @@ plot_data <- remove_burn_in(adult_abundance_all, burnin) %>%
   dplyr::select(functional_group, bodymass_bin_index, functional_group_index, total_abundance) %>%
   dplyr::mutate(functional_group_name = ifelse(functional_group == 10, "herbivorous endotherms",
                                                ifelse(functional_group == 11, "carnivorous  endotherms",
-                                                      ifelse(functional_group == 12, "omnivorous  endotherms",
-                                                             ifelse(functional_group == 13, "herbivorous ectotherms", # combine iteroparous and semelparous ectotherms
-                                                                    ifelse(functional_group == 14, "carnivorous ectotherms",
-                                                                           ifelse(functional_group == 15, "omnivorous ectotherms", "NA")))))))
+                                               ifelse(functional_group == 12, "omnivorous  endotherms",
+                                               ifelse(functional_group == 13, "herbivorous ectotherms", # combine iteroparous and semelparous ectotherms
+                                               ifelse(functional_group == 14, "carnivorous ectotherms",
+                                               ifelse(functional_group == 15, "omnivorous ectotherms", "NA")))))))
 
 plotName <- paste(scenario, "_", simulation_number, "_functional_group_bodymass_distribution",".tiff",sep="")
 tiff(file = (paste(output_folder,plotName, sep = "/")), units ="in", width=10, height=5, res=100)
@@ -661,47 +670,7 @@ rm(functional_group_data_all)
 
 print("saved generation length data (7/7 files)")
 
-
-# Plot abundance per functional group
-
-# remove_burn_in <- function(df, burnin) {
-#   
-#   df[,(burnin + 1):ncol(df)]
-# }
-
-# tidy data
-
-# adult_abundance_all <- as.data.frame(adult_abundance_all)
-# is.na(adult_abundance_all) <- !adult_abundance_all
-# 
-# plot_data <- remove_burn_in(adult_abundance_all, burnin) %>%
-#   dplyr::mutate(functional_group_index = row.names(.)) %>%
-#   dplyr::mutate(total_abundance = rowMeans(select(.,-functional_group_index), na.rm = TRUE)) %>%
-#   dplyr::mutate(functional_group = substr(functional_group_index, 
-#                                           start = 1, stop = 2)) %>%
-#   dplyr::mutate(bodymass_bin_index = str_sub(functional_group_index,-2, -1)) %>%
-#   #dplyr::mutate(bodymass_bin_index = str_remove(bodymass_bin_index, ".")) %>%
-#   dplyr::select(functional_group, bodymass_bin_index, functional_group_index, total_abundance) %>%
-#   dplyr::mutate(functional_group_name = ifelse(functional_group == 10, "herbivorous endotherms",
-#                                         ifelse(functional_group == 11, "carnivorous  endotherms",
-#                                         ifelse(functional_group == 12, "omnivorous  endotherms",
-#                                         ifelse(functional_group == 13, "herbivorous ectotherms", # combine iteroparous and semelparous ectotherms
-#                                         ifelse(functional_group == 14, "carnivorous ectotherms",
-#                                         ifelse(functional_group == 15, "omnivorous ectotherms", "NA")))))))
-# 
-# plotName <- paste(scenario, "_", simulation_number, "_functional_group_bodymass_distribution",".tiff",sep="")
-# tiff(file = (paste(output_folder,plotName, sep = "/")), units ="in", width=10, height=5, res=100)
-# 
-# 
-# print(ggplot(data = plot_data, aes( x = bodymass_bin_index, 
-#                                      y = total_abundance, col = functional_group_name)) +
-#   geom_bar(stat = 'identity') +
-#   labs(x = "bodymass bins", y = "total_modelled_abundance") +
-#   facet_wrap( ~ functional_group_name, nrow = 3))
-# 
-# dev.off()
-# 
-# rm(plot_data)
+#' TODO: Remove this warning when I've fixed and tested everything :/
 
 print("Warning: this function is still being tested, treat outputs with caution")
 
