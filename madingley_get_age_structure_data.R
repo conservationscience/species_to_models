@@ -252,7 +252,7 @@ duration_months <- as.numeric(sim_parameters %>%
 # 
 # data <- adult_list[[2]]
 # 
-data <- all_ages_list[[2]]
+# data <- all_ages_list[[2]]
 
 
 group_by_massbin <- function(data, breaks, duration_months) {
@@ -285,6 +285,7 @@ extant_massbin_data <- data %>%
                               abundance, biomass, adult) %>%
                 dplyr::group_by(massbins = cut(Current_body_mass_g,
                                                breaks = massbin_breaks,
+                                               include.lowest = FALSE,
                                                na.rm = FALSE,
                                                dig.lab = 11)) %>%
                 dplyr::group_by(massbins, time_step) %>%
@@ -297,32 +298,6 @@ extant_massbin_data <- data %>%
                                                              bodymass_bin_index, sep = ".")) %>%
                 dplyr::mutate(occupancy = ifelse(is.na(abundance_sum), "FALSE", "TRUE"))
 
-### IN DEVELOPMENT ###
-#' TODO: Finish and update the revision below
-
-# Trying to have the code below combine the above chunk that creates 
-# extant_massbin_data and the code below that creates generation_lengths, because 
-# they duplicate some processes and increase memory usage
-
-
-# extant_massbin_data <- data %>%
-#   dplyr::select(time_step, Current_body_mass_g, new_functional_group,
-#                 abundance, biomass, adult, generation_length) %>%
-#   dplyr::group_by(massbins = cut(Current_body_mass_g,
-#                                  breaks = massbin_breaks,
-#                                  na.rm = FALSE,
-#                                  dig.lab = 11)) %>%
-#   dplyr::group_by(massbins, time_step) %>%
-#   dplyr::summarise(abundance_sum = sum(abundance),
-#                    biomass_sum = sum(biomass),
-#                    generation_test = mean(generation_length)) %>% ## Problem is here - why do massbins end up with generation lengths for some functional groups that don't exist
-#   merge(bodymass_bins[ , c("massbins","bodymass_bin_index")],
-#         by = "massbins", all = TRUE) %>%
-#   dplyr::mutate(new_functional_group = fg) %>%
-#   dplyr::mutate(functional_group_index = paste(new_functional_group,
-#                                                bodymass_bin_index, sep = ".")) %>%
-#   dplyr::mutate(occupancy = ifelse(is.na(abundance_sum), "FALSE", "TRUE"))
-
 
 # Testing - this section checks if any previously extant functional groups have
 # become extinct, and adds zero abundance for remaining model timesteps (otherwise
@@ -330,44 +305,57 @@ extant_massbin_data <- data %>%
 # This feels super clunky, think it could be done a lot better, maybe with the
 # madingley simulation output for extinctions
 
-correct_timesteps <- c(1:duration_months)
+correct_timesteps <- c(0:(duration_months - 1)) # Make sure it is zero  indexed
 
-existing_timesteps <- unique(na.omit(extant_massbin_data$time_step))
-missing_timesteps <- correct_timesteps[!(correct_timesteps %in% existing_timesteps)]
+existing_timesteps <- sort(unique(na.omit(extant_massbin_data$time_step)))
+missing_timesteps <- sort(correct_timesteps[!(correct_timesteps %in% existing_timesteps)])
 occupied_massbins <- unique(extant_massbin_data$functional_group_index[extant_massbin_data$occupancy == TRUE])
 
-# Create a copy of extant_massbin_data but make all values zero
-empty_df <- extant_massbin_data %>%
-            dplyr::filter(occupancy == TRUE) %>%
-            dplyr::mutate(abundance_sum = 0, biomass_sum = 0, time_step = NA) %>%
-            dplyr::distinct(.)
+# Check if there are any timesteps missing (ie if any functional groups have
+# gone extinct)
 
-# Split into individual list for each functional group that has been extant at some
-# point during the simulation
+if (is_empty(missing_timesteps)) { # do nothing but rename
 
-single_empty_df_list <- split(empty_df, empty_df$functional_group_index)
+  massbin_data <- extant_massbin_data 
 
-# Add the time step value to each df on the list
-
-empty_df_list <- list()
-
-for (i in seq_along(single_empty_df_list)) {
-
-tmp1 <- do.call("rbind", replicate(length(missing_timesteps), single_empty_df_list[[i]], simplify = FALSE))
-
-tmp2 <- tmp1 %>%
-         dplyr::mutate(time_step = missing_timesteps)
-
-empty_df_list[[i]] <- tmp2
-
+} else { # create empty time step rows so they don't get deleted
+  
+  # Create a copy of extant_massbin_data but make all values zero
+  
+  empty_df <- extant_massbin_data %>%
+    dplyr::filter(occupancy == TRUE) %>%
+    dplyr::mutate(abundance_sum = 0, biomass_sum = 0, time_step = NA) %>%
+    dplyr::distinct(.)
+  
+  # Split into individual list for each functional group that has been extant at some
+  # point during the simulation
+  
+  single_empty_df_list <- split(empty_df, empty_df$functional_group_index)
+  
+  # Loop over and add timesteps
+  
+  empty_df_list <- list()
+  
+  for (i in seq_along(single_empty_df_list)) {
+    
+    tmp1 <- do.call("rbind", replicate(length(missing_timesteps), single_empty_df_list[[i]], simplify = FALSE))
+    
+    tmp2 <- tmp1 %>%
+      dplyr::mutate(time_step = missing_timesteps)
+    
+    empty_df_list[[i]] <- tmp2
+    
+  }
+  
+  # Bind back into one dataframe that now includes a value of zero for any 
+  # timesteps after a functional group becomes extinct
+  
+  extinct_massbin_data <- do.call("rbind", empty_df_list)
+  
+  massbin_data <- rbind(extant_massbin_data, extinct_massbin_data)
+  
 }
 
-# Bind back into one dataframe that now includes a value of zero for any 
-# timesteps after a functional group becomes extinct
-
-extinct_massbin_data <- do.call("rbind", empty_df_list)
-
-massbin_data <- rbind(extant_massbin_data, extinct_massbin_data)
 massbin_data <- massbin_data %>%
                 dplyr::select(- occupancy)
 
