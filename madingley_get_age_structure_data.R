@@ -89,6 +89,7 @@ newnames <- str_replace_all(oldnames," ", "_")
 names(new_cohorts) <- newnames
 new_cohorts <- new_cohorts %>% dplyr::rename(ID = parent_cohort_IDs)
 
+
 ## Calculate generation lengths
 
 ## Get timestep each cohort was born
@@ -143,14 +144,30 @@ growth_name <- results_files[str_detect(results_files, "Growth")]
 growth <- as.data.frame(read_tsv(file.path(model_results,growth_name, sep =""),
                         col_types = list(Latitude = col_skip(), # Skip the columns you don't need
                                          Longitude = col_skip(),
-                                         #growth_g = col_skip(),
+                                         growth_g = col_skip(),
                                          metabolism_g = col_skip(),
                                          predation_g = col_skip(),
                                          herbivory_g = col_skip()
                                          )))
 
-# Identify adult and juvenile cohorts and modify the data to contain only
-# data for adults
+# Get cohort abundance in birth timestep (because it is excluded from growth file)
+#' TODO: IMPORTANT get a better value for current bodymass (from maturity or growth)
+
+birth_abundance <- new_cohorts %>%
+  dplyr::select(offspring_cohort_ID, time_step, 
+                functional_group, abundance) %>%
+  dplyr::rename(ID = offspring_cohort_ID) %>%
+  dplyr::mutate(Current_body_mass_g = 1) %>%
+  dplyr::select(ID, time_step, Current_body_mass_g,
+                functional_group, abundance)
+
+# Add birth timestep abundance to growth
+
+abundance <- rbind(growth, birth_abundance) %>%
+        arrange(time_step)
+
+# Combine abundance values in growth with 'adult mass' in new_cohorts to identify
+# timesteps when cohorts are adults, and their adult abundance in that timestep
 
 all_ages_data <- growth %>%
   merge(new_cohorts[ , c("offspring_cohort_ID","ID","adult_mass")],
@@ -253,7 +270,7 @@ duration_months <- as.numeric(sim_parameters %>%
 
 # data <- adult_list[[2]]
 # 
-# data <- all_ages_list[[1]]
+#data <- all_ages_list[[1]]
 
 
 group_by_massbin <- function(data, breaks, duration_months) {
@@ -287,6 +304,7 @@ extant_massbin_data <- data %>%
                 dplyr::group_by(massbins = cut(Current_body_mass_g,
                                                breaks = bodymass_bins_upper,
                                                include.lowest = TRUE,
+                                               #right = FALSE,
                                                na.rm = FALSE,
                                                dig.lab = 11)) %>%
                 dplyr::group_by(massbins, time_step) %>%
