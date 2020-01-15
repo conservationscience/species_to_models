@@ -143,7 +143,7 @@ growth_name <- results_files[str_detect(results_files, "Growth")]
 growth <- as.data.frame(read_tsv(file.path(model_results,growth_name, sep =""),
                         col_types = list(Latitude = col_skip(), # Skip the columns you don't need
                                          Longitude = col_skip(),
-                                         growth_g = col_skip(),
+                                         #growth_g = col_skip(),
                                          metabolism_g = col_skip(),
                                          predation_g = col_skip(),
                                          herbivory_g = col_skip()
@@ -168,7 +168,7 @@ all_ages_data <- growth %>%
   dplyr::rename(parent_cohort_ID = ID.y) %>% 
   group_by(ID) %>% # Identify adults, including those whose bodymass have risen above then dropped below the adult mass threshold
   arrange(ID, time_step) %>%
-  mutate(first = as.numeric(row_number() == min(row_number()[tmp1 == TRUE]))) %>%
+  mutate(first = as.numeric(row_number() == min(row_number()[tmp1 == TRUE]))) %>% # This produces an error, can be ignored
   mutate(tmp2 = cumsum(first)) %>%
   mutate(adult = ifelse(tmp2 == 1, TRUE, FALSE)) %>%
   ungroup() %>%
@@ -358,7 +358,10 @@ if (is_empty(missing_timesteps)) { # do nothing but rename
 }
 
 massbin_data <- massbin_data %>%
-                dplyr::select(- occupancy)
+                dplyr::select(- occupancy) 
+
+massbin_data$time_step <- replace_na(massbin_data$time_step, 0) 
+                
 
 rm(extant_massbin_data, extinct_massbin_data)
 
