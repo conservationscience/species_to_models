@@ -18,23 +18,15 @@
 #' to see if can just use adult data, or separate gen lengths function from the
 #' group_by_massbin function
 #' 
-#' TODO: Work out if we can only read in certain columns of the large .txt files, 
-#' and also use ff package to reduce memory use of these big matrices.  
-#' the section that creates all_ages_data is VERRRY SLOW, so start there I think
-#' 
-#' TODO: Important.  When producing massbin data, we need rows for when
-#' groups have disappeared.  Should be something like 1 functional_group_index *
-#' missing timesteps added (preferably to massbin_data_long), so the rest works
-#' as it is now.  Also remove existing attempts to add missing_timestep_df
 
 ## For testing:
 # 
-indicators_project <- "N:/Quantitative-Ecology/Indicators-Project"
-location <- "Serengeti"
-scenario <- "Test_runs"
-simulation <- "aa_BuildModel"
-remove_juveniles <- "no"
-burnin <- 1 * 12
+# indicators_project <- "N:/Quantitative-Ecology/Indicators-Project"
+# location <- "Serengeti"
+# scenario <- "Test_runs"
+# simulation <- "aa_BuildModel"
+# remove_juveniles <- "no"
+# burnin <- 1 * 12
 
 
 get_age_structure_data <- function(indicators_project, location, scenario, simulation, remove_juveniles, burnin){
@@ -270,7 +262,7 @@ duration_months <- as.numeric(sim_parameters %>%
 
 # data <- adult_list[[2]]
 # 
-#data <- all_ages_list[[1]]
+# data <- all_ages_list[[4]]
 
 
 group_by_massbin <- function(data, breaks, duration_months) {
@@ -298,13 +290,14 @@ fg <- max(data$new_functional_group, na.rm = TRUE)
 
 # Group cohorts into the massbins and aggregate their abundance and biomass
 #   
+
 extant_massbin_data <- data %>%
                 dplyr::select(time_step, Current_body_mass_g, new_functional_group,
                               abundance, biomass, adult) %>%
                 dplyr::group_by(massbins = cut(Current_body_mass_g,
-                                               breaks = bodymass_bins_upper,
-                                               include.lowest = TRUE,
-                                               #right = FALSE,
+                                               breaks = bodymass_bins_lower,
+                                               include.lowest = FALSE,
+                                               right = TRUE,
                                                na.rm = FALSE,
                                                dig.lab = 11)) %>%
                 dplyr::group_by(massbins, time_step) %>%
@@ -316,7 +309,6 @@ extant_massbin_data <- data %>%
                 dplyr::mutate(functional_group_index = paste(new_functional_group,
                                                              bodymass_bin_index, sep = ".")) %>%
                 dplyr::mutate(occupancy = ifelse(is.na(abundance_sum), "FALSE", "TRUE"))
-
 
 # Testing - this section checks if any previously extant functional groups have
 # become extinct, and adds zero abundance for remaining model timesteps (otherwise
@@ -692,5 +684,5 @@ simulation_number, "in the", scenario, "scenario directory complete", sep = " ")
 
 # Test function
 
-get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin)
+# get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin)
 
