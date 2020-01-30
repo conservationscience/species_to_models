@@ -52,9 +52,7 @@ get_age_structure_data <- function(indicators_project, location, scenario, simul
   if( !dir.exists( file.path(output_folder) ) ) {
     dir.create( file.path(output_folder), recursive = TRUE )
     
-  }
-  
-  # function to filter lists by the element names
+   # function to filter lists by the element names
   
   filter_by_pattern <- function(pattern, your.list){
     
@@ -679,10 +677,14 @@ print("Warning: this function is still being tested, treat outputs with caution"
 print(paste("Processing of files from simulation number", 
 simulation_number, "in the", scenario, "scenario directory complete", sep = " "))
 
+  } else {
+  
+    print(paste("Folder", simulation, "has already been processed"), sep = " ")
+  }
 
 }
 
 # Test function
 
-# get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin)
+get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin)
 
