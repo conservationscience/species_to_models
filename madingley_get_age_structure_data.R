@@ -193,7 +193,6 @@ rm(growth, new_cohorts)
 # and you end up with different time series for different groups)
 # This df should be the same dimension as all_ages
 
-
 juvenile_data <- all_ages_data %>%
               dplyr::mutate(juvenile_abundance = ifelse(adult == FALSE, abundance, NA)) %>%
               dplyr::mutate(juvenile_biomass = ifelse(adult == FALSE, biomass, NA)) %>%
@@ -246,7 +245,7 @@ duration_months <- as.numeric(sim_parameters %>%
 
 # data <- juvenile_list[[4]]
 
-group_by_massbin <- function(data, breaks, duration_months) {
+group_by_massbin <- function(data, breaks, duration_months, generation_lengths) {
   
 massbin_breaks <- c(breaks[,1])
 
@@ -397,7 +396,9 @@ fg <- max(data$new_functional_group, na.rm = TRUE)
 # Calculate the generation length per massbin functional group (mean of all cohorts
 # within the massbin)
 
-generation_lengths <- data %>%
+if (generation_lengths == "yes") {
+
+  generation_lengths <- data %>%
   dplyr::select(ID, time_step, new_functional_group, 
                 Current_body_mass_g, generation_length) %>%
   dplyr::group_by(massbins = cut(Current_body_mass_g, 
@@ -428,13 +429,26 @@ return(output)
 
 rm(output)
 
+} else {
+  
+  output <- list(massbin_data, abundance_matrix_final, biomass_matrix_final)
+  
+  names(output) <- c("massbin_data_long", "abundance_wide", "biomass_wide")
+  
+  print(paste("functional group", fg, "processed", sep = " "))
+  
+  return(output)
+  
+  rm(output)
+  
+  }
 }
 
 # Convert data from all functional groups into the wide format using the
 # group_by_massbin function
 
 functional_group_data_all <- lapply(all_ages_list, group_by_massbin, 
-                             breaks = breaks, duration_months = duration_months)
+                             breaks, duration_months, "yes")
 
 # Save all ages wide abundance dataframe
 
@@ -456,7 +470,9 @@ message("saved all ages abundance data (1/6 files)")
 
 biomass_list <- flatten(lapply(functional_group_data_all, filter_by_pattern, 
                                pattern = "biomass_wide"))
+
 biomass_all <- do.call(rbind,biomass_list)
+
 rm(biomass_list)
 
 saveRDS( biomass_all, file = file.path(output_folder,paste(scenario, 
@@ -516,7 +532,7 @@ message("saved plot of functional group biomass (3/6 files)")
 # Get and save juveniles only massbin, abundance and biomass data
 
 juvenile_functional_group_data <- lapply(juvenile_list, group_by_massbin, 
-                                         breaks = breaks, duration_months = duration_months)
+                                         breaks, duration_months, "no")
 
 # Save juvenile wide abundance dataframe
 
