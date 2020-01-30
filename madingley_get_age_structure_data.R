@@ -25,11 +25,10 @@ indicators_project <- "N:/Quantitative-Ecology/Indicators-Project"
 location <- "Serengeti"
 scenario <- "Test_runs"
 simulation <- "aa_BuildModel"
-remove_juveniles <- "no"
 burnin <- 1 * 12
 
 
-get_age_structure_data <- function(indicators_project, location, scenario, simulation, remove_juveniles, burnin){
+get_age_structure_data <- function(indicators_project, location, scenario, simulation, burnin){
   
   require(tidyverse)
   
@@ -49,12 +48,13 @@ get_age_structure_data <- function(indicators_project, location, scenario, simul
                              "Outputs_from_adaptor_code/map_of_life",
                              scenario, simulation)
   
-  if( !dir.exists( file.path(output_folder) ) ) {
-    dir.create( file.path(output_folder), recursive = TRUE )
+  if ( !dir.exists( file.path(output_folder) ) ) {
+   
+  dir.create( file.path(output_folder), recursive = TRUE )
     
    # function to filter lists by the element names
   
-  filter_by_pattern <- function(pattern, your.list){
+  filter_by_pattern <- function(pattern, your.list) {
     
     require(stringr)
     
@@ -310,7 +310,7 @@ if (is_empty(missing_timesteps)) { # do nothing but rename
 
   massbin_data <- extant_massbin_data 
 
-} else { # create empty time step rows so they don't get deleted
+} else {# create empty time step rows so they don't get deleted
   
   # Create a copy of extant_massbin_data but make all values zero
   
@@ -436,10 +436,6 @@ rm(output)
 functional_group_data_all <- lapply(all_ages_list, group_by_massbin, 
                              breaks = breaks, duration_months = duration_months)
 
-# Save outputs
-
-if (remove_juveniles == "no") {
-  
 # Save the long format data
 
 #' TODO: When testing is complete, remove long format part because it uses
@@ -534,15 +530,8 @@ print(ggplot(data = plot_data, aes( x = bodymass_bin_index,
 
 dev.off()
 
-
 rm(abundance_all)
 rm(plot_data)
-
-
-
-} else if (remove_juveniles == "yes") {
-
-  print("saving adult data only")
 
 # Get and save adult massbin, abundance and biomass data
 
@@ -617,7 +606,7 @@ plot_data <- remove_burn_in(juvenile_abundance_all, burnin) %>%
                                                ifelse(functional_group == 14, "carnivorous ectotherms",
                                                ifelse(functional_group == 15, "omnivorous ectotherms", "NA")))))))
 
-plotName <- paste(scenario, "_", simulation_number, "_functional_group_bodymass_distribution",".tiff",sep="")
+plotName <- paste(scenario, "_", simulation_number, "_functional_group_bodymass_distribution2",".tiff",sep="")
 tiff(file = (paste(output_folder,plotName, sep = "/")), units ="in", width=10, height=5, res=100)
 
 
@@ -631,7 +620,7 @@ dev.off()
 
 rm(plot_data)
 
-}
+
 
 ## Get and save generation length data
 
@@ -667,7 +656,8 @@ simulation_number, "in the", scenario, "scenario directory complete", sep = " ")
 
 }
 
+
 # Test function
 
-get_age_structure_data(indicators_project, location, scenario, simulation, remove_juveniles, burnin)
+get_age_structure_data(indicators_project, location, scenario, simulation, burnin)
 
