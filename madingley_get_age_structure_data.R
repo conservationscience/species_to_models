@@ -28,7 +28,7 @@ simulation <- "aa_BuildModel"
 burnin <- 1 * 12
 
 
-get_age_structure_data <- function(indicators_project, location, scenario, simulation, burnin){
+get_age_structure_data <- function(indicators_project, location, scenario, simulation, burnin, save_long_format){
   
   require(tidyverse)
   
@@ -436,33 +436,11 @@ rm(output)
 functional_group_data_all <- lapply(all_ages_list, group_by_massbin, 
                              breaks = breaks, duration_months = duration_months)
 
-# Save the long format data
-
-#' TODO: When testing is complete, remove long format part because it uses
-#' up a lot of memory
-#' 
-massbin_long_list <- flatten(lapply(functional_group_data_all, filter_by_pattern,
-                                    pattern = "massbin_data_long"))
-
-massbin_long_all <- do.call(rbind,massbin_long_list)
-
-rm(massbin_long_list)
-
-#' TODO: Fix naming so it doesn't include 'BuildModel'
-
-saveRDS( massbin_long_all, file = file.path(output_folder,paste(scenario,
-                                  simulation_number, "massbin_long_all", sep = "_" )))
-write.csv( massbin_long_all, file = file.path(output_folder,paste(scenario,
-                                    simulation_number, "massbin_long_all.csv", sep = "_" )))
-
-rm(massbin_long_all)
-
-print("saved massbin data all ages (1/7 files)")
-
 # Save all ages wide abundance dataframe
 
 abundance_list <- flatten(lapply(functional_group_data_all, filter_by_pattern, 
                                  pattern = "abundance_wide"))
+
 abundance_all <- do.call(rbind,abundance_list)
 rm(abundance_list)
 
@@ -472,7 +450,7 @@ write.csv( abundance_all, file = file.path(output_folder,paste(scenario,
                               simulation_number, "abundance.csv", sep = "_" )))
 
 
-print("saved abundance data all ages (2/7 files)")
+message("saved all ages abundance data (1/6 files)")
 
 # Save all ages wide biomass dataframe
 
@@ -486,7 +464,7 @@ saveRDS( biomass_all, file = file.path(output_folder,paste(scenario,
 write.csv( biomass_all, file = file.path(output_folder,paste(scenario,
                                   simulation_number, "biomass.csv", sep = "_" )))
 
-print("saved biomass data all ages (3/7 files)")
+message("saved all ages biomass data (2/6 files)")
 
 rm(biomass_all)
 
@@ -533,27 +511,14 @@ dev.off()
 rm(abundance_all)
 rm(plot_data)
 
-# Get and save adult massbin, abundance and biomass data
+message("saved plot of functional group biomass (3/6 files)")
 
-# Save the long version with only adults
+# Get and save juveniles only massbin, abundance and biomass data
 
-juvenile_functional_group_data <- lapply(juvenile_list, group_by_massbin, breaks = breaks, duration_months = duration_months)
+juvenile_functional_group_data <- lapply(juvenile_list, group_by_massbin, 
+                                         breaks = breaks, duration_months = duration_months)
 
-juvenile_massbin_long_list <- flatten(lapply(juvenile_functional_group_data, filter_by_pattern, 
-                                    pattern = "massbin_data_long"))
-juvenile_massbin_long_all <- do.call(rbind,juvenile_massbin_long_list)
-rm(juvenile_massbin_long_list)
-
-saveRDS( juvenile_massbin_long_all, file = file.path(output_folder,paste(scenario, 
-                                                                simulation_number, "juvenile_massbin_long", sep = "_" )))
-write.csv( juvenile_massbin_long_all, file = file.path(output_folder,paste(scenario, 
-                                                                  simulation_number, "juvenile_massbin_long.csv", sep = "_" )))
-
-rm(juvenile_massbin_long_all)
-
-print("saved juvenile massbin data (4/7 files)")
-
-# Save adult wide abundance dataframe
+# Save juvenile wide abundance dataframe
 
 juvenile_abundance_list <- flatten(lapply(juvenile_functional_group_data, filter_by_pattern, 
                                  pattern = "abundance_wide"))
@@ -566,7 +531,7 @@ saveRDS( juvenile_abundance_all, file = file.path(output_folder,paste(scenario,
 write.csv( juvenile_abundance_all, file = file.path(output_folder,paste(scenario,
                                                                simulation_number, "juvenile_abundance.csv", sep = "_" )))
 
-print("saved juvenile abundance data (5/7 files)")
+message("saved juvenile abundance data (4/6 files)")
 
 # Save all juvenile wide biomass dataframe
 
@@ -582,7 +547,7 @@ write.csv( juvenile_biomass_all, file = file.path(output_folder,paste(scenario,
 
 rm(juvenile_biomass_all)
 
-print("saved juvenile biomass data (6/7 files)")
+message("saved juvenile biomass data (5/6 files)")
 
 remove_burn_in <- function(df, burnin) {
   
@@ -591,36 +556,6 @@ remove_burn_in <- function(df, burnin) {
 
 juvenile_abundance_all <- as.data.frame(juvenile_abundance_all)
 is.na(juvenile_abundance_all) <- !juvenile_abundance_all
-
-plot_data <- remove_burn_in(juvenile_abundance_all, burnin) %>%
-  dplyr::mutate(functional_group_index = row.names(.)) %>%
-  dplyr::mutate(total_abundance = rowMeans(select(.,-functional_group_index), na.rm = TRUE)) %>%
-  dplyr::mutate(functional_group = substr(functional_group_index, 
-                                          start = 1, stop = 2)) %>%
-  dplyr::mutate(bodymass_bin_index = str_sub(functional_group_index,-2, -1)) %>%
-  dplyr::select(functional_group, bodymass_bin_index, functional_group_index, total_abundance) %>%
-  dplyr::mutate(functional_group_name = ifelse(functional_group == 10, "herbivorous endotherms",
-                                               ifelse(functional_group == 11, "carnivorous  endotherms",
-                                               ifelse(functional_group == 12, "omnivorous  endotherms",
-                                               ifelse(functional_group == 13, "herbivorous ectotherms", # combine iteroparous and semelparous ectotherms
-                                               ifelse(functional_group == 14, "carnivorous ectotherms",
-                                               ifelse(functional_group == 15, "omnivorous ectotherms", "NA")))))))
-
-plotName <- paste(scenario, "_", simulation_number, "_functional_group_bodymass_distribution2",".tiff",sep="")
-tiff(file = (paste(output_folder,plotName, sep = "/")), units ="in", width=10, height=5, res=100)
-
-
-print(ggplot(data = plot_data, aes( x = bodymass_bin_index, 
-                                    y = total_abundance, col = functional_group_name)) +
-        geom_bar(stat = 'identity') +
-        labs(x = "bodymass bins", y = "total_modelled_abundance") +
-        facet_wrap( ~ functional_group_name, nrow = 3))
-
-dev.off()
-
-rm(plot_data)
-
-
 
 ## Get and save generation length data
 
@@ -639,7 +574,7 @@ write.csv( generation_length_all, file = file.path(output_folder,paste(scenario,
 
 rm(functional_group_data_all)
 
-print("saved generation length data (7/7 files)")
+message("saved generation length data (6/6 files)")
 
 #' TODO: Remove this warning when I've fixed and tested everything :/
 
@@ -659,5 +594,5 @@ simulation_number, "in the", scenario, "scenario directory complete", sep = " ")
 
 # Test function
 
-get_age_structure_data(indicators_project, location, scenario, simulation, burnin)
+get_age_structure_data(indicators_project, location, scenario, simulation, burnin, save_long_format)
 
