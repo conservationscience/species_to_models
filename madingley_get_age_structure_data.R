@@ -12,11 +12,11 @@
 #' TODO: Make this function remove burnin timesteps (for efficiency).  This will
 #' require updates to other indicator code though.
 #' 
-#' TODO: At the moment the generation lengths data requires group_by_massbin to be
-#' used on the all ages data, even if we have specified we want to remove juveniles.
-#' This means the apply needs to be run twice and adds a lot of time.  Find a way
-#' to see if can just use adult data, or separate gen lengths function from the
-#' group_by_massbin function
+#' TODO: IMPORTANT - fix so this function doesn't re-run if it's outputs are 
+#' already present, but doesn't skip just because an output folder has already
+#' been created - find some way to check what is inside the output folder
+#' 
+#' TODO: IMPORTANT - fix so this function can run over multiple replicates
 #' 
 
 ## For testing:
@@ -32,7 +32,9 @@ get_age_structure_data <- function(indicators_project, location, scenario, simul
   
   require(tidyverse)
   
-  # Get locations and file paths and simulation details
+  simulation_number <- str_remove_all(simulation, "[ _Buildmodel, M]")
+ 
+   # Get locations and file paths and simulation details
   
   dirs <- list.dirs(file.path(indicators_project, location, 
                               "Inputs_to_adaptor_code/Madingley_simulation_outputs", 
@@ -48,11 +50,19 @@ get_age_structure_data <- function(indicators_project, location, scenario, simul
                              "Outputs_from_adaptor_code/map_of_life",
                              scenario, simulation)
   
+  # Check if the age structure outputs have already been processed before proceeding
+  
+  files <- dir(output_folder)
+  files <- files[grep("juvenile",files)] # If it has been processed there should
+  # already be juvenile files in the output folder
+  
   if ( !dir.exists( file.path(output_folder) ) ) {
    
   dir.create( file.path(output_folder), recursive = TRUE )
     
-   # function to filter lists by the element names
+  } else if ((dir.exists(file.path(output_folder))) & (is_empty(files))) {
+    
+  # function to filter lists by the element names
   
   filter_by_pattern <- function(pattern, your.list) {
     
@@ -513,9 +523,9 @@ abundance_list <- flatten(lapply(functional_group_data_all, filter_by_pattern,
 abundance_all <- do.call(rbind,abundance_list)
 rm(abundance_list)
 
-saveRDS( abundance_all, file = file.path(output_folder,paste(scenario, 
+saveRDS( abundance_all, file = file.path(output_folder,paste("AgeStructure",scenario, 
                                simulation_number, "abundance", sep = "_" )))
-write.csv( abundance_all, file = file.path(output_folder,paste(scenario, 
+write.csv( abundance_all, file = file.path(output_folder,paste("AgeStructure",scenario, 
                               simulation_number, "abundance.csv", sep = "_" )))
 
 
@@ -530,9 +540,9 @@ biomass_all <- do.call(rbind,biomass_list)
 
 rm(biomass_list)
 
-saveRDS( biomass_all, file = file.path(output_folder,paste(scenario, 
+saveRDS( biomass_all, file = file.path(output_folder,paste("AgeStructure", scenario, 
                                        simulation_number, "biomass", sep = "_" )))
-write.csv( biomass_all, file = file.path(output_folder,paste(scenario,
+write.csv( biomass_all, file = file.path(output_folder,paste("AgeStructure", scenario,
                                   simulation_number, "biomass.csv", sep = "_" )))
 
 message("saved all ages biomass data (2/6 files)")
@@ -548,9 +558,9 @@ juvenile_biomass_all <- do.call(rbind,juvenile_biomass_list)
 
 rm(juvenile_biomass_list)
 
-saveRDS( juvenile_biomass_all, file = file.path(output_folder,paste(scenario, 
+saveRDS( juvenile_biomass_all, file = file.path(output_folder,paste("AgeStructure", scenario, 
                                                            simulation_number, "juvenile_biomass", sep = "_" )))
-write.csv( juvenile_biomass_all, file = file.path(output_folder,paste(scenario,
+write.csv( juvenile_biomass_all, file = file.path(output_folder,paste("AgeStructure", scenario,
                                                              simulation_number, "juvenile_biomass.csv", sep = "_" )))
 
 message("saved juvenile biomass data (3/6 files)")
@@ -566,9 +576,9 @@ juvenile_abundance_all <- do.call(rbind,juvenile_abundance_list)
 
 rm(juvenile_abundance_list)
 
-saveRDS( juvenile_abundance_all, file = file.path(output_folder,paste(scenario, 
+saveRDS( juvenile_abundance_all, file = file.path(output_folder,paste("AgeStructure", scenario, 
                                                                     simulation_number, "juvenile_abundance", sep = "_" )))
-write.csv( juvenile_abundance_all, file = file.path(output_folder,paste(scenario,
+write.csv( juvenile_abundance_all, file = file.path(output_folder,paste("AgeStructure", scenario,
                                                                       simulation_number, "juvenile_abundance.csv", sep = "_" )))
 
 message("saved juvenile abundance data (3/6 files)")
@@ -629,10 +639,10 @@ generation_length_list <- flatten(lapply(functional_group_data_all,
 generation_length_all <- do.call(rbind,generation_length_list)
 rm(generation_length_list)
 
-saveRDS( generation_length_all, file = file.path(output_folder,paste(scenario,
+saveRDS( generation_length_all, file = file.path(output_folder,paste("AgeStructure", scenario,
                                       simulation_number, "generation_lengths",
                                       sep = "_" )))
-write.csv( generation_length_all, file = file.path(output_folder,paste(scenario,
+write.csv( generation_length_all, file = file.path(output_folder,paste("AgeStructure",scenario,
                       simulation_number, "generation_lengths.csv", sep = "_" )))
 
 rm(functional_group_data_all)
@@ -647,15 +657,15 @@ print(paste("Processing of files from simulation number",
 simulation_number, "in the", scenario, "scenario directory complete", sep = " "))
 
   } else {
-  
-    print(paste("Folder", simulation, "has already been processed"), sep = " ")
-    
-  }
 
+    print(paste("Folder", simulation, "age structure data has already been processed"), sep = " ")
+
+  }
+  
 }
 
 
 # Test function
 
-# get_age_structure_data(indicators_project, location, scenario, simulation, burnin)
+get_age_structure_data(indicators_project, location, scenario, simulation, burnin)
 
