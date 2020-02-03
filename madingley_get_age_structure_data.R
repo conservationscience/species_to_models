@@ -24,7 +24,7 @@
 # indicators_project <- "N:/Quantitative-Ecology/Indicators-Project"
 # location <- "Serengeti"
 # scenario <- "Test_runs"
-# simulation <- "aa_BuildModel"
+# simulation <- "ae_BuildModel"
 # burnin <- 1 * 12
 
 
@@ -32,17 +32,32 @@ get_age_structure_data <- function(indicators_project, location, scenario, simul
   
   require(tidyverse)
   
-  simulation_number <- str_remove_all(simulation, "[ _Buildmodel, M]")
- 
-   # Get locations and file paths and simulation details
+  # Get locations and file paths and simulation details
   
   dirs <- list.dirs(file.path(indicators_project, location, 
                               "Inputs_to_adaptor_code/Madingley_simulation_outputs", 
                               scenario, simulation), recursive = FALSE)
+ 
   model_results <- dirs[!str_detect(dirs, "input")]
   results_files <- list.files(model_results)
   model_inputs <- dirs[str_detect(dirs, "input")]
-  simulation_number <- str_remove(simulation, '_BuildModel/')
+  simulation_number <- str_remove_all(simulation, "_Buildmodel")
+  
+  # Work out how many replicates there are
+  
+  reps <- (length(results_files) - 9) / 14
+  rep_numbers <- as.character(seq(0,(reps - 1)))
+  rep_index <- paste("_", rep_numbers, "_", sep = "")
+  
+  # Split up the files by replicate number
+  
+  rep_files <- list()
+  
+  for (rep in seq_along(rep_index)) {
+    
+  rep_files[[rep]] <- results_files[grep(rep_index[rep],results_files)]
+  
+  }
   
   # Create or set output folder
   
@@ -74,10 +89,17 @@ get_age_structure_data <- function(indicators_project, location, scenario, simul
     
   }
 
+  for (i in seq_along(rep_files)) {
+ 
   # Get the new_cohorts data from which we can calculate mean age of parents,
   # aka generation length
+
+
+# i <- 1
   
-new_cohorts_name <- results_files[str_detect(results_files, "NewCohorts")]
+#new_cohorts_name <- results_files[str_detect(results_files, "NewCohorts")]
+
+new_cohorts_name <- rep_files[[i]][str_detect(rep_files[[i]], "NewCohorts")]
 new_cohorts <- read_tsv(file.path(model_results,new_cohorts_name, sep =""), 
                         col_types = list(Latitude = col_skip(), # Skip the columns you don't need
                                          Longitude = col_skip()))
@@ -140,7 +162,8 @@ rm(born, reproduced, born_reproduced)
 # Get growth file (this is massive, might be a problem when processing multiple
 # replicates)
 
-growth_name <- results_files[str_detect(results_files, "Growth")]
+#growth_name <- results_files[str_detect(results_files, "Growth")]
+growth_name <- rep_files[[i]][str_detect(rep_files[[i]], "Growth")]
 growth <- as.data.frame(read_tsv(file.path(model_results,growth_name, sep =""),
                         col_types = list(Latitude = col_skip(), # Skip the columns you don't need
                                          Longitude = col_skip(),
@@ -163,10 +186,9 @@ birth_abundance <- new_cohorts %>%
 
 # Add birth timestep abundance to growth
 
-
-
-abundance <- rbind(growth, birth_abundance) %>%
-             arrange(time_step)
+# 
+ # abundance <- rbind(growth, birth_abundance) %>%
+ #             arrange(time_step)
 
 # Combine abundance values in growth with 'adult mass' in new_cohorts to identify
 # timesteps when cohorts are adults, and their adult abundance in that timestep
@@ -524,9 +546,9 @@ abundance_all <- do.call(rbind,abundance_list)
 rm(abundance_list)
 
 saveRDS( abundance_all, file = file.path(output_folder,paste("AgeStructure",scenario, 
-                               simulation_number, "abundance", sep = "_" )))
+                               simulation_number,rep_numbers[i], "abundance", sep = "_" )))
 write.csv( abundance_all, file = file.path(output_folder,paste("AgeStructure",scenario, 
-                              simulation_number, "abundance.csv", sep = "_" )))
+                              simulation_number,rep_numbers[i], "abundance.csv", sep = "_" )))
 
 
 message("saved all ages abundance data (1/6 files)")
@@ -541,9 +563,9 @@ biomass_all <- do.call(rbind,biomass_list)
 rm(biomass_list)
 
 saveRDS( biomass_all, file = file.path(output_folder,paste("AgeStructure", scenario, 
-                                       simulation_number, "biomass", sep = "_" )))
+                                       simulation_number,rep_numbers[i], "biomass", sep = "_" )))
 write.csv( biomass_all, file = file.path(output_folder,paste("AgeStructure", scenario,
-                                  simulation_number, "biomass.csv", sep = "_" )))
+                                  simulation_number,rep_numbers[i], "biomass.csv", sep = "_" )))
 
 message("saved all ages biomass data (2/6 files)")
 
@@ -559,9 +581,9 @@ juvenile_biomass_all <- do.call(rbind,juvenile_biomass_list)
 rm(juvenile_biomass_list)
 
 saveRDS( juvenile_biomass_all, file = file.path(output_folder,paste("AgeStructure", scenario, 
-                                                           simulation_number, "juvenile_biomass", sep = "_" )))
+                                                           simulation_number, rep_numbers[i], "juvenile_biomass", sep = "_" )))
 write.csv( juvenile_biomass_all, file = file.path(output_folder,paste("AgeStructure", scenario,
-                                                             simulation_number, "juvenile_biomass.csv", sep = "_" )))
+                                                             simulation_number, rep_numbers[i],"juvenile_biomass.csv", sep = "_" )))
 
 message("saved juvenile biomass data (3/6 files)")
 
@@ -577,9 +599,9 @@ juvenile_abundance_all <- do.call(rbind,juvenile_abundance_list)
 rm(juvenile_abundance_list)
 
 saveRDS( juvenile_abundance_all, file = file.path(output_folder,paste("AgeStructure", scenario, 
-                                                                    simulation_number, "juvenile_abundance", sep = "_" )))
+                                                                    simulation_number, rep_numbers[i],"juvenile_abundance", sep = "_" )))
 write.csv( juvenile_abundance_all, file = file.path(output_folder,paste("AgeStructure", scenario,
-                                                                      simulation_number, "juvenile_abundance.csv", sep = "_" )))
+                                                                      simulation_number, rep_numbers[i],"juvenile_abundance.csv", sep = "_" )))
 
 message("saved juvenile abundance data (3/6 files)")
 
@@ -613,7 +635,7 @@ plot_data <- remove_burn_in(abundance_all, burnin) %>%
                                         ifelse(functional_group == 14, "carnivorous ectotherms",
                                         ifelse(functional_group == 15, "omnivorous ectotherms", "NA")))))))
 
-plotName <- paste(scenario, "_", simulation_number, "_functional_group_bodymass_distribution",".tiff",sep="")
+plotName <- paste(scenario, "_", simulation_number, rep_numbers[i], "_functional_group_bodymass_distribution",".tiff",sep="")
 tiff(file = (paste(output_folder,plotName, sep = "/")), units ="in", width=10, height=5, res=100)
 
 
@@ -640,10 +662,10 @@ generation_length_all <- do.call(rbind,generation_length_list)
 rm(generation_length_list)
 
 saveRDS( generation_length_all, file = file.path(output_folder,paste("AgeStructure", scenario,
-                                      simulation_number, "generation_lengths",
+                                      simulation_number,rep_numbers[i], "generation_lengths",
                                       sep = "_" )))
 write.csv( generation_length_all, file = file.path(output_folder,paste("AgeStructure",scenario,
-                      simulation_number, "generation_lengths.csv", sep = "_" )))
+                      simulation_number, rep_numbers[i], "generation_lengths.csv", sep = "_" )))
 
 rm(functional_group_data_all)
 
@@ -654,7 +676,9 @@ message("saved generation length data (6/6 files)")
 print("Warning: this function is still being tested, treat outputs with caution")
 
 print(paste("Processing of files from simulation number", 
-simulation_number, "in the", scenario, "scenario directory complete", sep = " "))
+simulation_number,", replicate", rep_numbers[[i]], "in the", scenario, "scenario directory complete", sep = " "))
+
+}
 
   } else {
 
