@@ -11,13 +11,7 @@
 
 #' TODO: Make this function remove burnin timesteps (for efficiency).  This will
 #' require updates to other indicator code though.
-#' 
-#' TODO: IMPORTANT - fix so this function doesn't re-run if it's outputs are 
-#' already present, but doesn't skip just because an output folder has already
-#' been created - find some way to check what is inside the output folder
-#' 
-#' TODO: IMPORTANT - fix so this function can run over multiple replicates
-#' 
+
 
 ## For testing:
 # 
@@ -97,10 +91,9 @@ get_age_structure_data <- function(indicators_project, location, scenario, simul
 
 # i <- 1
   
-#new_cohorts_name <- results_files[str_detect(results_files, "NewCohorts")]
-
 new_cohorts_name <- rep_files[[i]][str_detect(rep_files[[i]], "NewCohorts")]
 new_cohorts <- read_tsv(file.path(model_results,new_cohorts_name, sep =""), 
+                        col_names = TRUE,
                         col_types = list(Latitude = col_skip(), # Skip the columns you don't need
                                          Longitude = col_skip()))
 
@@ -162,7 +155,6 @@ rm(born, reproduced, born_reproduced)
 # Get growth file (this is massive, might be a problem when processing multiple
 # replicates)
 
-#growth_name <- results_files[str_detect(results_files, "Growth")]
 growth_name <- rep_files[[i]][str_detect(rep_files[[i]], "Growth")]
 growth <- as.data.frame(read_tsv(file.path(model_results,growth_name, sep =""),
                         col_types = list(Latitude = col_skip(), # Skip the columns you don't need
@@ -176,13 +168,13 @@ growth <- as.data.frame(read_tsv(file.path(model_results,growth_name, sep =""),
 # Get cohort abundance in birth timestep (because it is excluded from growth file)
 #' TODO: IMPORTANT get a better value for current bodymass (from maturity or growth)
 
-birth_abundance <- new_cohorts %>%
-  dplyr::select(offspring_cohort_ID, time_step, 
-                functional_group, abundance) %>%
-  dplyr::rename(ID = offspring_cohort_ID) %>%
-  dplyr::mutate(Current_body_mass_g = 1) %>%
-  dplyr::select(ID, time_step, Current_body_mass_g,
-                functional_group, abundance)
+# birth_abundance <- new_cohorts %>%
+#   dplyr::select(offspring_cohort_ID, time_step, 
+#                 functional_group, abundance) %>%
+#   dplyr::rename(ID = offspring_cohort_ID) %>%
+#   dplyr::mutate(Current_body_mass_g = 1) %>%
+#   dplyr::select(ID, time_step, Current_body_mass_g,
+#                 functional_group, abundance)
 
 # Add birth timestep abundance to growth
 
@@ -214,10 +206,30 @@ all_ages_data <- growth %>%
   ungroup() %>%
   dplyr::select(-c(tmp1, tmp2, first))  
 
-
 print("cohort data processed")
 
 rm(growth, new_cohorts)
+
+# Get abundance at maturity, if we define maturity as reaching adult mass size
+#' TODO: This gives abundance at birth and death not abundance at birth and
+#' maturity, fix
+
+maturity <- all_ages_data %>% 
+        group_by(ID) %>%
+        slice(top_n(n=1, wt=desc(time_step)))
+        slice(which.min(time_step),
+              which.max(time_step)) %>%
+        select(ID, time_step, abundance, adult, new_functional_group, 
+               Current_body_mass_g)
+
+
+saveRDS( maturity, file = file.path(output_folder,paste("AgeStructure", scenario,
+                                    simulation_number,rep_numbers[i], "maturity",
+                                                                     sep = "_" )))
+write.csv( maturity, file = file.path(output_folder,paste("AgeStructure",scenario,
+                                     simulation_number, rep_numbers[i], "maturity.csv", sep = "_" )))
+
+rm(maturity)
 
 # Turn the juvenile abundance and biomass into NA instead of removing them, so
 # we keep all time-steps (otherwise it drops any timesteps without adult cohorts
