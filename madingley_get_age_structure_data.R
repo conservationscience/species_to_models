@@ -9,6 +9,8 @@
 #' @returns saves massbin, abundance, biomass and generation lengths to adaptor
 #' output folder
 
+#' TODO: Check the .rds files, don't think they're saving properly
+ 
 #' TODO: Restructure so this takes multiple other functions like process_buildmodel
 #' TODO: Fix plot functional groups? Or does it just look weird because there are few
 #' timesteps?
