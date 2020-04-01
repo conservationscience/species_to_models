@@ -21,19 +21,19 @@
 ## For testing:
 # 
 
-inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/Test_runs/aa_BuildModel"
-outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/Test_runs/aa_BuildModel"
-simulation_folder_name <- "aa_BuildModel"
-burnin <- 1 * 12
-scenario <- "Test_runs"
+# inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/Test_runs/aa_BuildModel"
+# outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/Test_runs/aa_BuildModel"
+# simulation_folder_name <- "aa_BuildModel"
+# burnin <- 1 * 12
+# scenario <- "Test_runs"
 # 
 # get_age_structure_data(inputs, outputs, scenario, simulation_folder_name, burnin)
 
-inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/Test_runs/ae_BuildModel"
-outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/Test_runs/ae_BuildModel"
-simulation_folder_name <- "ae_BuildModel"
-burnin <- 1 * 12
-scenario <- "Test_runs"
+# inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/Test_runs/ae_BuildModel"
+# outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/Test_runs/ae_BuildModel"
+# simulation_folder_name <- "ae_BuildModel"
+# burnin <- 1 * 12
+# scenario <- "Test_runs"
 # 
 # get_age_structure_data(inputs, outputs, scenario, simulation_folder_name, burnin)
 
@@ -41,37 +41,32 @@ scenario <- "Test_runs"
 # simulation = simulation_folder_names
 
 
-test <- get_detailed_cohort_data(inputs, outputs)
+#' @param inputs string, path to directory where the raw simulation outputs
+#' are saved
+#' @param outputs string, path to directory where the processed simulation outputs
+#' will be stored, including the outputs from this function
+#' @returns a list of dataframes, one for each replicate of the simulation. Each
+#' dataframe contains the following variables:Cohort_ID, timestep, current bodymass,
+#' cohort abundance, ID of the cohort's parent cohort, the mass at which the cohort becomes
+#' adult, cohort generation length, cohort biomass, the functional group to 
+#' which the cohort belongs, and a logical value determining if the cohort are adults in that timestep 
+
 
 get_detailed_cohort_data <- function(inputs, outputs) {
   
+  # Libraries and functions
   
   require(tidyverse)
   
-  # Get locations and file paths and simulation details
+  # function to filter lists by the element names
   
-  dirs <- list.dirs(inputs, recursive = FALSE)
-  model_results <- dirs[!str_detect(dirs, "input")]
-  results_files <- list.files(model_results)
-  model_inputs <- dirs[str_detect(dirs, "input")]
-  simulation_folder_name <- basename(inputs)
-  simulation_number <- str_remove(simulation_folder_name, "_BuildModel")
-  
-  # Work out how many replicates there are in the simulation folder
-  
-  reps <- (length(results_files) - 9) / 14
-  rep_numbers <- as.character(seq(0,(reps - 1)))
-  rep_index <- paste("_", rep_numbers, "_", sep = "")
-  
-  # Split up the files by replicate number
-  
-  out_list <- list()
-  
-  rep_files <- list()
-  
-  for (rep in seq_along(rep_index)) {
+  filter_by_pattern <- function(pattern, your.list) {
     
-    rep_files[[rep]] <- results_files[grep(rep_index[rep],results_files)]
+    require(stringr)
+    
+    names(your.list) %>% 
+    str_detect(pattern) %>%
+    keep(your.list, .)
     
   }
   
@@ -88,26 +83,38 @@ get_detailed_cohort_data <- function(inputs, outputs) {
   } 
   
   if ((dir.exists(file.path(outputs))) & (is_empty(files))) {
+  
+  # Get locations and file paths and simulation details
+  
+  dirs <- list.dirs(inputs, recursive = FALSE)
+  model_results <- dirs[!str_detect(dirs, "input")]
+  results_files <- list.files(model_results)
+  model_inputs <- dirs[str_detect(dirs, "input")]
+  simulation_folder_name <- basename(inputs)
+  simulation_number <- str_remove(simulation_folder_name, "_BuildModel")
+  
+  # Work out how many replicates there are in the simulation folder
+  
+  reps <- (length(results_files) - 9) / 14
+  rep_numbers <- as.character(seq(0,(reps - 1)))
+  rep_index <- paste("_", rep_numbers, "_", sep = "")
+  
+  # Split up the output files by replicate number
+  
+  all_ages_data <- list()
+  
+  rep_files <- list()
+  
+  for (rep in seq_along(rep_index)) {
     
-    # function to filter lists by the element names
+    rep_files[[rep]] <- results_files[grep(rep_index[rep],results_files)]
     
-    filter_by_pattern <- function(pattern, your.list) {
-      
-      require(stringr)
-      
-      names(your.list) %>% 
-        str_detect(pattern) %>%
-        keep(your.list, .)
-      
-    }
-    
-    for (i in seq_along(rep_files)) {
+  }
+  
+      for (i in seq_along(rep_files)) {
       
       # Get the new_cohorts data from which we can calculate mean age of parents,
       # aka generation length
-      
-      
-      # i <- 1
       
       new_cohorts_name <- rep_files[[i]][str_detect(rep_files[[i]], "NewCohorts")]
       new_cohorts <- read_tsv(file.path(model_results,new_cohorts_name, sep =""), 
@@ -203,7 +210,7 @@ get_detailed_cohort_data <- function(inputs, outputs) {
       # Combine abundance values in growth with 'adult mass' in new_cohorts to identify
       # timesteps when cohorts are adults, and their adult abundance in that timestep
       
-      all_ages_data <- growth %>%
+      all_ages_data[[i]] <- growth %>%
         merge(new_cohorts[ , c("offspring_cohort_ID","ID","adult_mass")],
               by.x = "ID", by.y = "offspring_cohort_ID", all = TRUE) %>%
         merge(generation_length_df[c("ID", "generation_length")], all = TRUE) %>%
@@ -249,8 +256,8 @@ get_detailed_cohort_data <- function(inputs, outputs) {
       # 
       # rm(maturity)
 
-    }
-    out_list[[i]] <- all_ages_data
+      }
+  return(all_ages_data)
   }
 }
 
