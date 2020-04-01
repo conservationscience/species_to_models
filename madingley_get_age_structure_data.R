@@ -21,26 +21,29 @@
 ## For testing:
 # 
 
-# inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/Test_runs/aa_BuildModel"
-# outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/Test_runs/aa_BuildModel"
-# simulation_folder_name <- "aa_BuildModel"
-# burnin <- 1 * 12
-# scenario <- "Test_runs"
+inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/Test_runs/aa_BuildModel"
+outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/Test_runs/aa_BuildModel"
+simulation_folder_name <- "aa_BuildModel"
+burnin <- 1 * 12
+scenario <- "Test_runs"
 # 
 # get_age_structure_data(inputs, outputs, scenario, simulation_folder_name, burnin)
 
-# inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/Test_runs/ae_BuildModel"
-# outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/Test_runs/ae_BuildModel"
-# simulation_folder_name <- "ae_BuildModel"
-# burnin <- 1 * 12
-# scenario <- "Test_runs"
+inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/Test_runs/ae_BuildModel"
+outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/Test_runs/ae_BuildModel"
+simulation_folder_name <- "ae_BuildModel"
+burnin <- 1 * 12
+scenario <- "Test_runs"
 # 
 # get_age_structure_data(inputs, outputs, scenario, simulation_folder_name, burnin)
 
 # inputs = simulation_paths
 # simulation = simulation_folder_names
 
-get_age_structure_data <- function(inputs, outputs, scenario, simulation_folder_name, burnin){
+
+test <- get_detailed_cohort_data(inputs, outputs)
+
+get_detailed_cohort_data <- function(inputs, outputs) {
   
   
   require(tidyverse)
@@ -48,20 +51,21 @@ get_age_structure_data <- function(inputs, outputs, scenario, simulation_folder_
   # Get locations and file paths and simulation details
   
   dirs <- list.dirs(inputs, recursive = FALSE)
-  
-  
   model_results <- dirs[!str_detect(dirs, "input")]
   results_files <- list.files(model_results)
   model_inputs <- dirs[str_detect(dirs, "input")]
+  simulation_folder_name <- basename(inputs)
   simulation_number <- str_remove(simulation_folder_name, "_BuildModel")
   
-  # Work out how many replicates there are
+  # Work out how many replicates there are in the simulation folder
   
   reps <- (length(results_files) - 9) / 14
   rep_numbers <- as.character(seq(0,(reps - 1)))
   rep_index <- paste("_", rep_numbers, "_", sep = "")
   
   # Split up the files by replicate number
+  
+  out_list <- list()
   
   rep_files <- list()
   
@@ -71,23 +75,19 @@ get_age_structure_data <- function(inputs, outputs, scenario, simulation_folder_
     
   }
   
-  # Create or set output folder
-  
-  output_folder <- outputs
-  
   # Check if the age structure outputs have already been processed before proceeding
   
-  files <- dir(output_folder)
+  files <- dir(outputs)
   files <- files[grep("juvenile",files)] # If it has been processed there should
   # already be juvenile files in the output folder
   
-  if ( !dir.exists( file.path(output_folder) ) ) {
+  if ( !dir.exists( file.path(outputs) ) ) {
     
-    dir.create( file.path(output_folder), recursive = TRUE )
+    dir.create( file.path(outputs), recursive = TRUE )
     
   } 
   
-  if ((dir.exists(file.path(output_folder))) & (is_empty(files))) {
+  if ((dir.exists(file.path(outputs))) & (is_empty(files))) {
     
     # function to filter lists by the element names
     
@@ -241,14 +241,19 @@ get_age_structure_data <- function(inputs, outputs, scenario, simulation_folder_
       #          Current_body_mass_g)
       # 
       # 
-      # saveRDS( maturity, file = file.path(output_folder,paste("AgeStructure", scenario,
+      # saveRDS( maturity, file = file.path(outputs,paste("AgeStructure", scenario,
       #                                                         simulation_number,rep_numbers[i], "maturity",
       #                                                         sep = "_" )))
-      # write.csv( maturity, file = file.path(output_folder,paste("AgeStructure",scenario,
+      # write.csv( maturity, file = file.path(outputs,paste("AgeStructure",scenario,
       #                                                           simulation_number, rep_numbers[i], "maturity.csv", sep = "_" )))
       # 
       # rm(maturity)
-      # 
+
+    }
+    out_list[[i]] <- all_ages_data
+  }
+}
+
       # Turn the juvenile abundance and biomass into NA instead of removing them, so
       # we keep all time-steps (otherwise it drops any timesteps without adult cohorts
       # and you end up with different time series for different groups)
@@ -256,6 +261,8 @@ get_age_structure_data <- function(inputs, outputs, scenario, simulation_folder_
       
       #' TODO: Once the group_by_massbin function juvenile values have been checked against
       #' this data, can remove this stuff
+
+    convert_cohorts_to_massbins <- function()
       
       juvenile_data <- all_ages_data %>%
         dplyr::mutate(juvenile_abundance = ifelse(adult == FALSE, abundance, NA)) %>%
@@ -575,9 +582,9 @@ get_age_structure_data <- function(inputs, outputs, scenario, simulation_folder_
       abundance_all <- do.call(rbind,abundance_list)
       rm(abundance_list)
       
-      saveRDS( abundance_all, file = file.path(output_folder,paste("AgeStructure",scenario, 
+      saveRDS( abundance_all, file = file.path(outputs,paste("AgeStructure",scenario, 
                                                                    simulation_number,rep_numbers[i], "abundance", sep = "_" )))
-      write.csv( abundance_all, file = file.path(output_folder,paste("AgeStructure",scenario, 
+      write.csv( abundance_all, file = file.path(outputs,paste("AgeStructure",scenario, 
                                                                      simulation_number,rep_numbers[i], "abundance.csv", sep = "_" )))
       
       
@@ -592,9 +599,9 @@ get_age_structure_data <- function(inputs, outputs, scenario, simulation_folder_
       
       rm(biomass_list)
       
-      saveRDS( biomass_all, file = file.path(output_folder,paste("AgeStructure", scenario, 
+      saveRDS( biomass_all, file = file.path(outputs,paste("AgeStructure", scenario, 
                                                                  simulation_number,rep_numbers[i], "biomass", sep = "_" )))
-      write.csv( biomass_all, file = file.path(output_folder,paste("AgeStructure", scenario,
+      write.csv( biomass_all, file = file.path(outputs,paste("AgeStructure", scenario,
                                                                    simulation_number,rep_numbers[i], "biomass.csv", sep = "_" )))
       
       message("saved all ages biomass data (2/6 files)")
@@ -610,9 +617,9 @@ get_age_structure_data <- function(inputs, outputs, scenario, simulation_folder_
       
       rm(juvenile_biomass_list)
       
-      saveRDS( juvenile_biomass_all, file = file.path(output_folder,paste("AgeStructure", scenario, 
+      saveRDS( juvenile_biomass_all, file = file.path(outputs,paste("AgeStructure", scenario, 
                                                                           simulation_number, rep_numbers[i], "juvenile_biomass", sep = "_" )))
-      write.csv( juvenile_biomass_all, file = file.path(output_folder,paste("AgeStructure", scenario,
+      write.csv( juvenile_biomass_all, file = file.path(outputs,paste("AgeStructure", scenario,
                                                                             simulation_number, rep_numbers[i],"juvenile_biomass.csv", sep = "_" )))
       
       message("saved juvenile biomass data (3/6 files)")
@@ -628,9 +635,9 @@ get_age_structure_data <- function(inputs, outputs, scenario, simulation_folder_
       
       rm(juvenile_abundance_list)
       
-      saveRDS( juvenile_abundance_all, file = file.path(output_folder,paste("AgeStructure", scenario, 
+      saveRDS( juvenile_abundance_all, file = file.path(outputs,paste("AgeStructure", scenario, 
                                                                             simulation_number, rep_numbers[i],"juvenile_abundance", sep = "_" )))
-      write.csv( juvenile_abundance_all, file = file.path(output_folder,paste("AgeStructure", scenario,
+      write.csv( juvenile_abundance_all, file = file.path(outputs,paste("AgeStructure", scenario,
                                                                               simulation_number, rep_numbers[i],"juvenile_abundance.csv", sep = "_" )))
       
       message("saved juvenile abundance data (3/6 files)")
@@ -666,7 +673,7 @@ get_age_structure_data <- function(inputs, outputs, scenario, simulation_folder_
                                                                                  ifelse(functional_group == 15, "omnivorous ectotherms", "NA")))))))
       
       plotName <- paste(scenario, "_", simulation_number, rep_numbers[i], "_functional_group_bodymass_distribution",".tiff",sep="")
-      tiff(file = (paste(output_folder,plotName, sep = "/")), units ="in", width=10, height=5, res=100)
+      tiff(file = (paste(outputs,plotName, sep = "/")), units ="in", width=10, height=5, res=100)
       
       
       print(ggplot(data = plot_data, aes( x = bodymass_bin_index, 
@@ -691,10 +698,10 @@ get_age_structure_data <- function(inputs, outputs, scenario, simulation_folder_
       generation_length_all <- do.call(rbind,generation_length_list)
       rm(generation_length_list)
       
-      saveRDS( generation_length_all, file = file.path(output_folder,paste("AgeStructure", scenario,
+      saveRDS( generation_length_all, file = file.path(outputs,paste("AgeStructure", scenario,
                                                                            simulation_number,rep_numbers[i], "generation_lengths",
                                                                            sep = "_" )))
-      write.csv( generation_length_all, file = file.path(output_folder,paste("AgeStructure",scenario,
+      write.csv( generation_length_all, file = file.path(outputs,paste("AgeStructure",scenario,
                                                                              simulation_number, rep_numbers[i], "generation_lengths.csv", sep = "_" )))
       
       rm(functional_group_data_all)
