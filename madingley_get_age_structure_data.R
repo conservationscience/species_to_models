@@ -29,11 +29,11 @@
 # 
 # get_age_structure_data(inputs, outputs, scenario, simulation_folder_name, burnin)
 
-# inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/Test_runs/ae_BuildModel"
-# outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/Test_runs/ae_BuildModel"
-# simulation_folder_name <- "ae_BuildModel"
-# burnin <- 1 * 12
-# scenario <- "Test_runs"
+inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/Test_runs/ae_BuildModel"
+outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/Test_runs/ae_BuildModel"
+simulation_folder_name <- "ae_BuildModel"
+burnin <- 1 * 12
+scenario <- "Test_runs"
 # 
 # get_age_structure_data(inputs, outputs, scenario, simulation_folder_name, burnin)
 
@@ -101,7 +101,7 @@ get_detailed_cohort_data <- function(inputs, outputs) {
   
   # Split up the output files by replicate number
   
-  all_ages_data <- list()
+  cohort_data <- list()
   
   rep_files <- list()
   
@@ -210,7 +210,7 @@ get_detailed_cohort_data <- function(inputs, outputs) {
       # Combine abundance values in growth with 'adult mass' in new_cohorts to identify
       # timesteps when cohorts are adults, and their adult abundance in that timestep
       
-      all_ages_data[[i]] <- growth %>%
+      cohort_data[[i]] <- growth %>%
         merge(new_cohorts[ , c("offspring_cohort_ID","ID","adult_mass")],
               by.x = "ID", by.y = "offspring_cohort_ID", all = TRUE) %>%
         merge(generation_length_df[c("ID", "generation_length")], all = TRUE) %>%
@@ -239,7 +239,7 @@ get_detailed_cohort_data <- function(inputs, outputs) {
       #' TODO: This gives abundance at birth and death not abundance at birth and
       #' maturity, fix
       
-      # maturity <- all_ages_data %>% 
+      # maturity <- cohort_data %>% 
       #   group_by(ID) %>%
       #   slice(top_n(n=1, wt=desc(time_step)))
       # slice(which.min(time_step),
@@ -257,7 +257,7 @@ get_detailed_cohort_data <- function(inputs, outputs) {
       # rm(maturity)
 
       }
-  return(all_ages_data)
+  return(cohort_data)
   }
 }
 
@@ -269,9 +269,22 @@ get_detailed_cohort_data <- function(inputs, outputs) {
       #' TODO: Once the group_by_massbin function juvenile values have been checked against
       #' this data, can remove this stuff
 
-    convert_cohorts_to_massbins <- function()
+i <- 1
+
+cohort_data <- get_detailed_cohort_data(inputs, outputs)
+
+convert_cohorts_to_massbins <- function(inputs, cohort_data){
+  
+  dirs <- list.dirs(inputs, recursive = FALSE)
+  model_results <- dirs[!str_detect(dirs, "input")]
+  results_files <- list.files(model_results)
+  model_inputs <- dirs[str_detect(dirs, "input")]
+  simulation_folder_name <- basename(inputs)
+  simulation_number <- str_remove(simulation_folder_name, "_BuildModel")
+        
+        for (i in seq_along(cohort_data)) {
       
-      juvenile_data <- all_ages_data %>%
+        juvenile_data <- cohort_data[[i]] %>%
         dplyr::mutate(juvenile_abundance = ifelse(adult == FALSE, abundance, NA)) %>%
         dplyr::mutate(juvenile_biomass = ifelse(adult == FALSE, biomass, NA)) %>%
         dplyr::select(-c(abundance, biomass)) %>%
@@ -291,7 +304,7 @@ get_detailed_cohort_data <- function(inputs, outputs) {
       
       # Split the data by functional groups
       
-      all_ages_list <- split(all_ages_data, all_ages_data$new_functional_group)
+      all_ages_list <- split(cohort_data[[i]], cohort_data[[i]]$new_functional_group)
       juvenile_list <- split(juvenile_data, juvenile_data$new_functional_group)
       
       # Get true duration of the simulation
@@ -323,14 +336,16 @@ get_detailed_cohort_data <- function(inputs, outputs) {
       
       # data <- juvenile_list[[4]]
       
-      group_by_massbin <- function(data, breaks, duration_months, generation_lengths) {
+   #    group_by_massbin <- function(data, breaks, duration_months, generation_lengths) {
         
         massbin_breaks <- c(breaks[,1])
         
         # Split into lower and upper bounds
         
-        bodymass_bins_upper <- massbin_breaks[-79]
-        bodymass_bins_lower <- massbin_breaks[-1]
+        #' TODO: Not sure why these don't work any more!!
+        
+        bodymass_bins_upper <- c(1000000000, massbin_breaks[massbin_breaks != min(massbin_breaks)]) # Add a huge upper limit
+        bodymass_bins_lower <- massbin_breaks
         
         # Combine to produce column called 'massbins' that matches the format of 
         # model output massbin columns, so we can use it to merge other data later
