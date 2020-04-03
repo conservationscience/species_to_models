@@ -40,6 +40,8 @@ scenario <- "Test_runs"
 # inputs = simulation_paths
 # simulation = simulation_folder_names
 
+# FUNCTION 1 - Get the detailed cohort data ----
+
 
 #' @param inputs string, path to directory where the raw simulation outputs
 #' are saved
@@ -261,17 +263,21 @@ get_detailed_cohort_data <- function(inputs, outputs) {
   }
 }
 
-      # Turn the juvenile abundance and biomass into NA instead of removing them, so
-      # we keep all time-steps (otherwise it drops any timesteps without adult cohorts
-      # and you end up with different time series for different groups)
-      # This df should be the same dimension as all_ages
-      
-      #' TODO: Once the group_by_massbin function juvenile values have been checked against
-      #' this data, can remove this stuff
-
-i <- 1
 
 cohort_data <- get_detailed_cohort_data(inputs, outputs)
+
+# FUNCTION 2 - Convert the cohort data into massbin data ----
+
+# This function should also work at the simulation level (i.e. input are all
+# the replicates in one simulation folder, and outputs are all the replicates in
+# one simulation folder)
+
+## TODO: Important - output is currently not in correct massbin order.  Might 
+## need to go back to previous approach of splitting the data by functional
+## groups then rebinding it after summarising by timestep and massbin
+## TODO: Check the biomass matrices match the massbin outputs
+## TODO: Add an age switch (pick whether to output adults or juveniles, juveniles
+## are the default)
 
 convert_cohorts_to_massbins <- function(inputs, cohort_data){
   
@@ -282,30 +288,20 @@ convert_cohorts_to_massbins <- function(inputs, cohort_data){
   simulation_folder_name <- basename(inputs)
   simulation_number <- str_remove(simulation_folder_name, "_BuildModel")
         
-        for (i in seq_along(cohort_data)) {
+  out <- list()
+  
+      for (i in seq_along(cohort_data)) {
+          
+     
+        # juvenile_data <- cohort_data[[i]] %>%
+        # dplyr::mutate(juvenile_abundance = ifelse(adult == FALSE, abundance, NA)) %>%
+        # dplyr::mutate(juvenile_biomass = ifelse(adult == FALSE, biomass, NA)) %>%
+        # dplyr::select(-c(abundance, biomass)) %>%
+        # dplyr::rename(abundance = juvenile_abundance, biomass = juvenile_biomass) 
       
-        juvenile_data <- cohort_data[[i]] %>%
-        dplyr::mutate(juvenile_abundance = ifelse(adult == FALSE, abundance, NA)) %>%
-        dplyr::mutate(juvenile_biomass = ifelse(adult == FALSE, biomass, NA)) %>%
-        dplyr::select(-c(abundance, biomass)) %>%
-        dplyr::rename(abundance = juvenile_abundance, biomass = juvenile_biomass) 
-      
-      # Function to sort cohorts into bodymass bins
-      
-      # Get bodymass bins lower bounds
+      # Get bodymass bins
       
       options(scipen = 999) # suppress scientific notation
-      
-      breaks <- read.csv(file.path(model_inputs, '/Model setup/Ecological definition files/MassBinDefinitions.csv'))
-      
-      # Group by bodymass bins and timestep. 
-      
-      ## TODO: Check the biomass matrices match the massbin outputs
-      
-      # Split the data by functional groups
-      
-      all_ages_list <- split(cohort_data[[i]], cohort_data[[i]]$new_functional_group)
-      juvenile_list <- split(juvenile_data, juvenile_data$new_functional_group)
       
       # Get true duration of the simulation
       
@@ -318,73 +314,55 @@ convert_cohorts_to_massbins <- function(inputs, cohort_data){
                                       dplyr:: select(Value)) * 12
       
       
-      # Function to group cohorts into massbins and sum their abundance and biomass per timestep
+      # Split into lower and upper bounds
       
-      #' @param data long format dataframe containing abundance and biomass of each cohort
-      #' over time
-      #' @param breaks dataframe with one column where rows are the lower bounds of the
-      #' massbins
-      #' @param duration_months number of monthly timesteps the simulation ran for
-      #' @returns wide format dataframe where rows are functional groups and columns
-      #' are timesteps, and long format dataframe of generation length per functional group
+      breaks <- read.csv(file.path(model_inputs, '/Model setup/Ecological definition files/MassBinDefinitions.csv'))
       
-      # To test function
-      
-      # data <- adult_list[[2]]
-      # 
-      # data <- all_ages_list[[1]]
-      
-      # data <- juvenile_list[[4]]
-      
-   #    group_by_massbin <- function(data, breaks, duration_months, generation_lengths) {
+      bodymass_bins_lower <- c(breaks[,1])
+      bodymass_bins_upper <- c(1000000000, 
+                               bodymass_bins_lower[bodymass_bins_lower != 
+                                                       min(bodymass_bins_lower)]) # Add a huge upper limit
+
+      # Combine to produce column called 'massbins' that matches the format of 
+      # model output massbin columns, so we can use it to merge other data later
         
-        massbin_breaks <- c(breaks[,1])
-        
-        # Split into lower and upper bounds
-        
-        #' TODO: Not sure why these don't work any more!!
-        
-        bodymass_bins_upper <- c(1000000000, massbin_breaks[massbin_breaks != min(massbin_breaks)]) # Add a huge upper limit
-        bodymass_bins_lower <- massbin_breaks
-        
-        # Combine to produce column called 'massbins' that matches the format of 
-        # model output massbin columns, so we can use it to merge other data later
-        
-        bodymass_bins <- as.data.frame(cbind(bodymass_bins_lower, bodymass_bins_upper)) %>%
-          mutate(temp = paste(bodymass_bins_lower, bodymass_bins_upper,  
-                              sep = ",")) %>%
-          mutate(massbins = paste("(", temp, "]", sep = "")) %>%
-          mutate(bodymass_bin_index = c(77:0)) %>%
-          dplyr::select(-temp)
-        
-        # Get functional group name
-        
-        fg <- max(data$new_functional_group, na.rm = TRUE)
+      bodymass_bins <- as.data.frame(cbind(bodymass_bins_lower, 
+                                           bodymass_bins_upper)) %>%
+                         mutate(temp = paste(bodymass_bins_lower, 
+                                             bodymass_bins_upper,  
+                                            sep = ",")) %>%
+                         mutate(massbins = paste("(", temp, "]", sep = "")) %>%
+                         mutate(bodymass_bin_index = 
+                                c((length(bodymass_bins_lower) - 1):0)) %>%
+                         dplyr::select(-temp)
         
         # Group cohorts into the massbins and aggregate their abundance and biomass
         
         #' TODO: Check the juvenile values look right
+        #' TODO: Massbins without any biomass are returning functional group
+        #' values prefixed by NA (instead of 10, 11, 12 etc).  Fix this.
         
-        extant_massbin_data <- data %>%
+        extant_massbin_data <- cohort_data[[i]] %>%
           dplyr::select(time_step, Current_body_mass_g, new_functional_group,
-                        abundance, biomass, adult) %>%
+                        abundance, biomass, adult) %>% # get important variables
           dplyr::group_by(massbins = cut(Current_body_mass_g,
-                                         breaks = bodymass_bins_lower,
+                                         breaks = bodymass_bins_upper,
                                          include.lowest = FALSE,
                                          right = TRUE,
                                          na.rm = FALSE,
-                                         dig.lab = 11)) %>%
-          dplyr::group_by(massbins, time_step) %>%
-          dplyr::summarise(abundance_sum = sum(abundance),
-                           biomass_sum = sum(biomass),
-                           juvenile_abundance = sum(abundance[adult== FALSE]),
-                           juvenile_biomass = sum(biomass[adult== FALSE])) %>%
+                                         dig.lab = 11)) %>% # reduce the resolution by grouping cohorts into bodymass bins
+          dplyr::group_by(massbins, time_step, new_functional_group) %>%
+          dplyr::summarise(abundance_sum = sum(abundance), # sum the abundance of all cohorts in that massbin
+                           biomass_sum = sum(biomass), # ditto but with biomass
+                           juvenile_abundance = sum(abundance[adult== FALSE]), # ditto but only for cohorts that haven't reached adulthood in that timestep
+                           juvenile_biomass = sum(biomass[adult== FALSE])) %>% # ditto but with biomass
+          # NB: If abundance and juvenile abundance are the same, it means all cohorts in that massbin at that timestep are juvenile (common in early timesteps)
           merge(bodymass_bins[ , c("massbins","bodymass_bin_index")],
-                by = "massbins", all = TRUE) %>%
-          dplyr::mutate(new_functional_group = fg) %>%
+                by = "massbins", all = TRUE) %>% # Add the bodymass bin index
+         # dplyr::mutate(new_functional_group = fg) %>% # Add the functional group
           dplyr::mutate(functional_group_index = paste(new_functional_group,
-                                                       bodymass_bin_index, sep = ".")) %>%
-          dplyr::mutate(occupancy = ifelse(is.na(abundance_sum), "FALSE", "TRUE"))
+                                                       bodymass_bin_index, sep = ".")) %>% # combine the two to create an index of functional-group-bodymass-bin
+          dplyr::mutate(occupancy = ifelse(is.na(abundance_sum), "FALSE", "TRUE")) # Add a tag to identify empty vs occupied massbins (ie not all massbins will contain organisms at all timesteps)
         
         # Testing - this section checks if any previously extant functional groups have
         # become extinct, and adds zero abundance for remaining model timesteps (otherwise
@@ -393,7 +371,6 @@ convert_cohorts_to_massbins <- function(inputs, cohort_data){
         # madingley simulation output for extinctions
         
         correct_timesteps <- c(0:(duration_months - 1)) # Make sure it is zero  indexed
-        
         existing_timesteps <- sort(unique(na.omit(extant_massbin_data$time_step)))
         missing_timesteps <- sort(correct_timesteps[!(correct_timesteps %in% existing_timesteps)])
         occupied_massbins <- unique(extant_massbin_data$functional_group_index[extant_massbin_data$occupancy == TRUE])
@@ -405,14 +382,15 @@ convert_cohorts_to_massbins <- function(inputs, cohort_data){
           
           massbin_data <- extant_massbin_data 
           
-        } else {# create empty time step rows so they don't get deleted
+        } else { # create empty time step rows so they don't get deleted
           
           # Create a copy of extant_massbin_data but make all values zero
           
           empty_df <- extant_massbin_data %>%
-            dplyr::filter(occupancy == TRUE) %>%
-            dplyr::mutate(abundance_sum = 0, biomass_sum = 0, time_step = NA) %>%
-            dplyr::distinct(.)
+                      dplyr::filter(occupancy == TRUE) %>%
+                      dplyr::mutate(abundance_sum = 0, biomass_sum = 0, 
+                                    time_step = NA) %>%
+                      dplyr::distinct(.)
           
           # Split into individual list for each functional group that has been extant at some
           # point during the simulation
@@ -425,7 +403,9 @@ convert_cohorts_to_massbins <- function(inputs, cohort_data){
           
           for (i in seq_along(single_empty_df_list)) {
             
-            tmp1 <- do.call("rbind", replicate(length(missing_timesteps), single_empty_df_list[[i]], simplify = FALSE))
+            tmp1 <- do.call("rbind", replicate(length(missing_timesteps), 
+                                               single_empty_df_list[[i]], 
+                                               simplify = FALSE))
             
             tmp2 <- tmp1 %>%
               dplyr::mutate(time_step = missing_timesteps)
@@ -438,157 +418,163 @@ convert_cohorts_to_massbins <- function(inputs, cohort_data){
           # timesteps after a functional group becomes extinct
           
           extinct_massbin_data <- do.call("rbind", empty_df_list)
-          
           massbin_data <- rbind(extant_massbin_data, extinct_massbin_data)
           
-        }
+       }
         
         massbin_data <- massbin_data %>%
-          dplyr::select(- occupancy) 
+                             dplyr::select(- occupancy) 
         
         massbin_data$time_step <- replace_na(massbin_data$time_step, 0) 
         
-        
-        rm(extant_massbin_data, extinct_massbin_data)
-        
-        # Convert from long to wide format so it matches the netcdf model output format
-        
-        # abundance_wide <- massbin_data %>%
-        #                   dplyr::select(-biomass_sum) %>% # remove biomass
-        #                   spread(time_step, abundance_sum,
-        #                          fill = NA, convert = FALSE) %>%
-        #                   dplyr::arrange(bodymass_bin_index) %>%
-        #                    `rownames<-`(.[,4])  %>%
-        #                   dplyr::select(-c(new_functional_group,massbins,
-        #                                  massbins, bodymass_bin_index,
-        #                                  functional_group_index))
+        # Convert the long format massbin_data into wide format, so it matches
+        # the netcdf files with all ages
         
         abundance_wide <- massbin_data %>%
-          dplyr::select(-biomass_sum, -juvenile_biomass, -juvenile_abundance) %>% # remove biomass
-          spread(time_step, abundance_sum,
-                 fill = NA, convert = FALSE) %>%
-          dplyr::arrange(bodymass_bin_index) %>%
-          `rownames<-`(.[,4])  %>%
-          dplyr::select(-c(new_functional_group,massbins,
-                           massbins, bodymass_bin_index,
-                           functional_group_index))
+                          dplyr::select(-biomass_sum, -juvenile_biomass, 
+                                        -juvenile_abundance) %>% # remove biomass
+                          spread(time_step, abundance_sum,
+                                 fill = NA, convert = FALSE) %>%
+                          dplyr::arrange(bodymass_bin_index) %>%
+                          `rownames<-`(.[,4])  %>%
+                          dplyr::select(-c(new_functional_group,massbins,
+                                           massbins, bodymass_bin_index,
+                                           functional_group_index))
         
         abundance_matrix_temp <- as.matrix(abundance_wide) # convert to matrix
         
-        abundance_matrix_final <- ifelse(abundance_matrix_temp >= 1,
+        out[[i]] <- ifelse(abundance_matrix_temp >= 1,
                                          log(abundance_matrix_temp),0) # convert log values
         
-        rm(abundance_matrix_temp, abundance_wide)
+        rm(extant_massbin_data, extinct_massbin_data, 
+           abundance_matrix_temp, abundance_wide)
         
-        biomass_wide <- massbin_data %>%
-          dplyr::select(-abundance_sum,-juvenile_biomass, -juvenile_abundance) %>% # Remove abundance
-          spread(time_step, biomass_sum,
-                 fill = NA, convert = FALSE) %>%
-          dplyr::arrange(bodymass_bin_index) %>%
-          `rownames<-`(.[,4])  %>%
-          dplyr::select(-c(new_functional_group,massbins,
-                           massbins, bodymass_bin_index,
-                           functional_group_index))
+    }
+  
+  return(out)
+  
+}
         
-        biomass_matrix_temp <- as.matrix(biomass_wide)
+test <- convert_cohorts_to_massbins(inputs, cohort_data)
+
+
+
+
+# Convert from long to wide format so it matches the netcdf model output format
+
+
+
+rm(abundance_matrix_temp, abundance_wide)
+
+functional_group_biomass[[j]] <- massbin_data %>%
+  dplyr::select(-abundance_sum,-juvenile_biomass, -juvenile_abundance) %>% # Remove abundance
+  spread(time_step, biomass_sum,
+         fill = NA, convert = FALSE) %>%
+  dplyr::arrange(bodymass_bin_index) %>%
+  `rownames<-`(.[,4])  %>%
+  dplyr::select(-c(new_functional_group,massbins,
+                   massbins, bodymass_bin_index,
+                   functional_group_index))
+
+biomass_matrix_temp <- as.matrix(biomass_wide)
+biomass_matrix_final <- ifelse(biomass_matrix_temp >= 1,
+                               log(biomass_matrix_temp),0)
+
+rm(biomass_matrix_temp, biomass_wide)
+
         
-        biomass_matrix_final <- ifelse(biomass_matrix_temp >= 1,
-                                       log(biomass_matrix_temp),0)
-        
-        rm(biomass_matrix_temp, biomass_wide)
-        
-        juvenile_biomass_wide <- massbin_data %>%
-          dplyr::select(-abundance_sum,-biomass_sum, -juvenile_abundance) %>% # Remove abundance
-          spread(time_step, juvenile_biomass,
-                 fill = NA, convert = FALSE) %>%
-          dplyr::arrange(bodymass_bin_index) %>%
-          `rownames<-`(.[,4])  %>%
-          dplyr::select(-c(new_functional_group,massbins,
-                           massbins, bodymass_bin_index,
-                           functional_group_index))
-        
-        juvenile_biomass_matrix_temp <- as.matrix(juvenile_biomass_wide)
-        
-        juvenile_biomass_matrix_final <- ifelse(juvenile_biomass_matrix_temp >= 1,
-                                                log(juvenile_biomass_matrix_temp),0)
-        
-        rm(juvenile_biomass_matrix_temp, juvenile_biomass_wide)
-        
-        juvenile_abundance_wide <- massbin_data %>%
-          dplyr::select(-abundance_sum,-biomass_sum, -juvenile_biomass) %>% # Remove abundance
-          spread(time_step, juvenile_abundance,
-                 fill = NA, convert = FALSE) %>%
-          dplyr::arrange(bodymass_bin_index) %>%
-          `rownames<-`(.[,4])  %>%
-          dplyr::select(-c(new_functional_group,massbins,
-                           massbins, bodymass_bin_index,
-                           functional_group_index))
-        
-        juvenile_abundance_matrix_temp <- as.matrix(juvenile_abundance_wide)
-        
-        juvenile_abundance_matrix_final <- ifelse(juvenile_abundance_matrix_temp >= 1,
-                                                  log(juvenile_abundance_matrix_temp),0)
-        
-        rm(juvenile_abundance_matrix_temp, juvenile_abundance_wide)
-        
-        fg <- max(data$new_functional_group, na.rm = TRUE)
-        
+        # juvenile_biomass_wide <- massbin_data %>%
+        #   dplyr::select(-abundance_sum,-biomass_sum, -juvenile_abundance) %>% # Remove abundance
+        #   spread(time_step, juvenile_biomass,
+        #          fill = NA, convert = FALSE) %>%
+        #   dplyr::arrange(bodymass_bin_index) %>%
+        #   `rownames<-`(.[,4])  %>%
+        #   dplyr::select(-c(new_functional_group,massbins,
+        #                    massbins, bodymass_bin_index,
+        #                    functional_group_index))
+        # 
+        # juvenile_biomass_matrix_temp <- as.matrix(juvenile_biomass_wide)
+        # 
+        # juvenile_biomass_matrix_final <- ifelse(juvenile_biomass_matrix_temp >= 1,
+        #                                         log(juvenile_biomass_matrix_temp),0)
+        # 
+        # rm(juvenile_biomass_matrix_temp, juvenile_biomass_wide)
+        # 
+        # juvenile_abundance_wide <- massbin_data %>%
+        #   dplyr::select(-abundance_sum,-biomass_sum, -juvenile_biomass) %>% # Remove abundance
+        #   spread(time_step, juvenile_abundance,
+        #          fill = NA, convert = FALSE) %>%
+        #   dplyr::arrange(bodymass_bin_index) %>%
+        #   `rownames<-`(.[,4])  %>%
+        #   dplyr::select(-c(new_functional_group,massbins,
+        #                    massbins, bodymass_bin_index,
+        #                    functional_group_index))
+        # 
+        # juvenile_abundance_matrix_temp <- as.matrix(juvenile_abundance_wide)
+        # 
+        # juvenile_abundance_matrix_final <- ifelse(juvenile_abundance_matrix_temp >= 1,
+        #                                           log(juvenile_abundance_matrix_temp),0)
+        # 
+        # rm(juvenile_abundance_matrix_temp, juvenile_abundance_wide)
+        # 
+        # fg <- max(data$new_functional_group, na.rm = TRUE)
+        # 
         # Calculate the generation length per massbin functional group (mean of all cohorts
         # within the massbin)
         
-        if (generation_lengths == "yes") {
-          
-          generation_lengths <- data %>%
-            dplyr::select(ID, time_step, new_functional_group, 
-                          Current_body_mass_g, generation_length) %>%
-            dplyr::group_by(massbins = cut(Current_body_mass_g, 
-                                           breaks = massbin_breaks,  
-                                           na.rm = FALSE,
-                                           dig.lab = 11)) %>% #suppress scientific notation
-            dplyr::group_by(massbins, new_functional_group) %>%
-            dplyr::summarise(gen_length_mean = mean(generation_length, 
-                                                    na.rm = TRUE),
-                             gen_length_max = max(generation_length, na.rm = TRUE),
-                             gen_length_min = min(generation_length, na.rm = TRUE)) %>%
-            merge(bodymass_bins[ , c("massbins","bodymass_bin_index")],
-                  by = "massbins", all = TRUE) %>%
-            dplyr::mutate(new_functional_group = fg) %>%
-            dplyr::mutate(functional_group_index = paste(new_functional_group, 
-                                                         bodymass_bin_index, sep = ".")) %>%
-            dplyr::select(-c(new_functional_group,massbins,
-                             massbins)) %>%
-            dplyr::arrange(bodymass_bin_index)
-          
-          output <- list(massbin_data, abundance_matrix_final, biomass_matrix_final, 
-                         juvenile_biomass_matrix_final, juvenile_abundance_matrix_final,
-                         generation_lengths)
-          
-          names(output) <- c("massbin_data_long", "abundance_wide", "biomass_wide", 
-                             "juvenile_biomass_wide", "juvenile_abundance_wide", 
-                             "generation_lengths")
-          
-          print(paste("functional group", fg, "processed", sep = " "))
-          
-          return(output)
-          
-          rm(output)
-          
-        } else {
-          
-          output <- list(massbin_data, abundance_matrix_final, biomass_matrix_final, 
-                         juvenile_biomass_matrix_final, juvenile_abundance_matrix_final)
-          
-          names(output) <- c("massbin_data_long", "abundance_wide", "biomass_wide", 
-                             "juvenile_biomass_wide", "juvenile_abundance_wide")
-          
-          print(paste("functional group", fg, "processed", sep = " "))
-          
-          return(output)
-          
-          rm(output)
-          
-        }
-      }
+      #   if (generation_lengths == "yes") {
+      #     
+      #     generation_lengths <- data %>%
+      #       dplyr::select(ID, time_step, new_functional_group, 
+      #                     Current_body_mass_g, generation_length) %>%
+      #       dplyr::group_by(massbins = cut(Current_body_mass_g, 
+      #                                      breaks = massbin_breaks,  
+      #                                      na.rm = FALSE,
+      #                                      dig.lab = 11)) %>% #suppress scientific notation
+      #       dplyr::group_by(massbins, new_functional_group) %>%
+      #       dplyr::summarise(gen_length_mean = mean(generation_length, 
+      #                                               na.rm = TRUE),
+      #                        gen_length_max = max(generation_length, na.rm = TRUE),
+      #                        gen_length_min = min(generation_length, na.rm = TRUE)) %>%
+      #       merge(bodymass_bins[ , c("massbins","bodymass_bin_index")],
+      #             by = "massbins", all = TRUE) %>%
+      #       dplyr::mutate(new_functional_group = fg) %>%
+      #       dplyr::mutate(functional_group_index = paste(new_functional_group, 
+      #                                                    bodymass_bin_index, sep = ".")) %>%
+      #       dplyr::select(-c(new_functional_group,massbins,
+      #                        massbins)) %>%
+      #       dplyr::arrange(bodymass_bin_index)
+      #     
+      #     output <- list(massbin_data, abundance_matrix_final, biomass_matrix_final, 
+      #                    juvenile_biomass_matrix_final, juvenile_abundance_matrix_final,
+      #                    generation_lengths)
+      #     
+      #     names(output) <- c("massbin_data_long", "abundance_wide", "biomass_wide", 
+      #                        "juvenile_biomass_wide", "juvenile_abundance_wide", 
+      #                        "generation_lengths")
+      #     
+      #     print(paste("functional group", fg, "processed", sep = " "))
+      #     
+      #     return(output)
+      #     
+      #     rm(output)
+      #     
+      #   } else {
+      #     
+      #     output <- list(massbin_data, abundance_matrix_final, biomass_matrix_final, 
+      #                    juvenile_biomass_matrix_final, juvenile_abundance_matrix_final)
+      #     
+      #     names(output) <- c("massbin_data_long", "abundance_wide", "biomass_wide", 
+      #                        "juvenile_biomass_wide", "juvenile_abundance_wide")
+      #     
+      #     print(paste("functional group", fg, "processed", sep = " "))
+      #     
+      #     return(output)
+      #     
+      #     rm(output)
+      #     
+      #   }
+      # }
       
       # Convert data from all functional groups into the wide format using the
       # group_by_massbin function
