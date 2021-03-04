@@ -80,8 +80,10 @@ get_detailed_cohort_data <- function(inputs, outputs) {
   
   # Check if the age structure outputs have already been processed before proceeding
   
-  # files <- dir(outputs)
-  # files <- files[grep("juvenile",files)] # If it has been processed there should
+  files <- dir(outputs)
+  
+  #' TODO: Update this to more relevant file name
+  files <- files[grep("juvenile",files)] # If it has been processed there should
   # already be juvenile files in the output folder
   
   if ( !dir.exists( file.path(outputs) ) ) {
@@ -138,44 +140,108 @@ get_detailed_cohort_data <- function(inputs, outputs) {
       
       # replace spaces in column names with underscores
       
-      clean_names(new_cohorts)
+      new_cohorts <- clean_names(new_cohorts)
+      names(new_cohorts)
 
+      new_cohorts <- new_cohorts %>% dplyr::rename(ID = parent_cohort_i_ds)
+      
       ## Calculate generation lengths
       
       ## Get timestep each cohort was born
       
       born <- new_cohorts %>%
-        dplyr::select(offspring_cohort_ID, 
+        dplyr::select(offspring_cohort_id, 
                       functional_group, 
                       adult_mass, time_step) 
+      head(born)
       
       ## Get timestep for each year each cohort reproduces
       
       reproduced <- new_cohorts %>%
         dplyr::select(ID, time_step) 
       
+      head(reproduced)
+      
       ## Merge to create dataframe with timestep born, timestep of reproduction (so
       # there can be only one timestep born per cohort, but multiple timesteps of reproduction)
       # Not all cohorts born also reproduce, which is why this creates a df with fewer
       # observations
       
-      born_reproduced <- merge(born, reproduced, by.x = "offspring_cohort_ID", 
+      born_reproduced <- merge(born, reproduced, by.x = "offspring_cohort_id", 
                                by.y = "ID")
       
       born_reproduced <- born %>%
-        merge(reproduced, by.x = "offspring_cohort_ID", 
+        merge(reproduced, by.x = "offspring_cohort_id", 
               by.y = "ID") %>%
         dplyr::mutate(age_reproduced_years = (time_step.y - time_step.x)/12)
       
-      ## Calculate generation length for each cohort (mean age of reproduction in years)
+      head(born_reproduced)
+      
+      # Assign cohorts to their virtual species
+      
+      groups <- readRDS(file.path(outputs, "groups.rds"))
+      
+      head(groups)
+      
+      bodymass_bins_upper <- unique(groups$mass_upper)
+      
+      # Add massbins
+      
+      born_reproduced_groups1 <- born_reproduced %>%
+              dplyr::group_by(massbins = cut(adult_mass,
+                                            breaks = bodymass_bins_upper,
+                                            include.lowest = FALSE,
+                                            right = TRUE,
+                                            na.rm = FALSE,
+                                            dig.lab = 11))
+      
+      # Re-format the massbin column(s) so they match the groups DF, so then
+      # we can match up the two and add virtual species group_id to the 
+      # new_cohorts DF.  This is a bit clunky, probably a more elegant way to
+      # do it.
+      
+      # Split into two cols
+      
+      born_reproduced_groups2 <- do.call(rbind, 
+                                         str_split(born_reproduced_groups1$massbins, ','))
+      
+      # Covnert to dataframe and rename columsn to match groups df
+      
+      born_reproduced_groups2 <- as.data.frame(born_reproduced_groups2) 
+      
+      colnames(born_reproduced_groups2) <- c("mass_lower", "mass_upper")
+      
+      # Remove parentheses and convert to numeric
+      
+      born_reproduced_groups2 <- born_reproduced_groups2 %>%
+               mutate(mass_lower = readr::parse_number(mass_lower),
+                      mass_upper = as.numeric(str_extract(mass_upper, "-?[0-9.]+")))
+      
+      # Bind massbin columns to born_reproduced cohorts data
+      
+      born_reproduced_groups <- cbind(born_reproduced_groups1, born_reproduced_groups2)
+      head(born_reproduced_groups)
+      
+      # Merge with groups DF based on massbin columns in each
+      
+      born_reproduced_groups <- born_reproduced_groups %>%
+               merge(groups[c("mass_lower", "mass_upper","bodymass_index")],
+                     by = c("mass_lower", "mass_upper")) %>%
+               mutate(group_id = paste(functional_group, bodymass_index, sep = "."))
+      
+      head(born_reproduced_groups)
+      
+      ## Calculate generation length for each group (mean age of reproduction in years)
       
       generation_length_df <- born_reproduced %>% 
-        group_by(offspring_cohort_ID) %>% 
+        group_by(offspring_cohort_id) %>% 
         summarize(generation_length = mean(age_reproduced_years)) %>% # Where gen_length is mean age of reproduction for that cohort in years
-        merge(.,born_reproduced[ , c("offspring_cohort_ID",
+        merge(.,born_reproduced[ , c("offspring_cohort_id",
                                      "functional_group","adult_mass")],
-              by = "offspring_cohort_ID", all = TRUE) %>%
+              by = "offspring_cohort_id", all = TRUE) %>%
         unique()
+      
+      head(generation_length_df)
       
       ## Rename columns
       
