@@ -59,35 +59,22 @@ scenario <- "999_Test_runs"
 #' which the cohort belongs, and a logical value determining if the cohort are adults in that timestep 
 
 
-get_detailed_cohort_data <- function(inputs, outputs) {
+get_generation_lengths <- function(inputs, outputs) {
   
   # Libraries and functions
   
   require(tidyverse)
   require(janitor)
   
-  # function to filter lists by the element names
-  
-  # filter_by_pattern <- function(pattern, your.list) {
-  #   
-  #   require(stringr)
-  #   
-  #   names(your.list) %>% 
-  #     str_detect(pattern) %>%
-  #     keep(your.list, .)
-  #   
-  # }
-  
-  # Check if the age structure outputs have already been processed before proceeding
-  
-  label <- basename(inputs)
-  sim_label <- str_remove(label, "_BuildModel")
+
+  # Check how many replicates have already been processed
   
   files <- dir(outputs)
   
-  #' TODO: Update this to more relevant file name
-  files <- files[grep("generation",files)] # If it has been processed there should
-  # already be juvenile files in the output folder
+  files <- files[grep("generation",files)] 
+  length(files)
+  
+  # Check and create output directory
   
   if ( !dir.exists( file.path(outputs) ) ) {
     
@@ -95,17 +82,7 @@ get_detailed_cohort_data <- function(inputs, outputs) {
     
   } 
   
-  # Check outputs haven't already been processed??
-  
-  if ((dir.exists(file.path(outputs))) & (!is_empty(files))) {
-    
-    print(paste("BuildModel folder", sim_label, "has already been processed",
-                sep = " "))
-  }
-  
-  if ((dir.exists(file.path(outputs))) & (is_empty(files))) {
-    
-    # Get locations and file paths and simulation details
+  # Get number of replicates etc in the buildmodel folder
     
     dirs <- list.dirs(inputs, recursive = FALSE)
     model_results <- dirs[!str_detect(dirs, "input")]
@@ -113,16 +90,26 @@ get_detailed_cohort_data <- function(inputs, outputs) {
     model_inputs <- dirs[str_detect(dirs, "input")]
     simulation_folder_name <- basename(inputs)
     simulation_number <- str_remove(simulation_folder_name, "_BuildModel")
-    
-    # Work out how many replicates there are in the simulation folder
+    scenario_label <- tolower(substring(scenario, 5))
+    scenario_label
     
     reps <- (length(results_files) - 9) / 14
     rep_numbers <- as.character(seq(0,(reps - 1)))
     rep_index <- paste("_", rep_numbers, "_", sep = "")
     
-    # Split up the output files by replicate number
+    # Check if all replicates already processed
     
-    cohort_data <- list()
+    if ((dir.exists(file.path(outputs))) & (length(files) == length(rep_index))) {
+      
+      print(paste("BuildModel folder", sim_label, "has already been processed",
+                  sep = " "))
+    }
+    
+    # If not, continue processing
+    
+    if ((dir.exists(file.path(outputs))) & (length(files) != length(rep_index))) {
+    
+    # Split up the model output files by replicate number
     
     rep_files <- list()
     
@@ -132,9 +119,11 @@ get_detailed_cohort_data <- function(inputs, outputs) {
       
     }
     
-    out <- list()
-    
     for (i in seq_along(rep_files)) {
+      
+      rep_label <- rep_index[i]
+      rep_label <- str_sub(rep_label, end=-2)
+      rep_label
       
       # Get the new_cohorts data from which we can calculate mean age of parents,
       # aka generation length
@@ -315,17 +304,24 @@ get_detailed_cohort_data <- function(inputs, outputs) {
       
       head(generation_length_df)
       
-     
-      rep_label <- rep_index[i]
-      
       write.csv(generation_length_df, file.path(outputs,
-                                                paste(sim_label,
-                                                rep_label, "generation_lengths.csv")))
+                                                paste("GenerationLengths_",
+                                                      simulation_number, 
+                                                rep_label, ".csv", sep = "")))
+      saveRDS(generation_length_df, file.path(outputs,
+                                                paste("GenerationLengths_",
+                                                      simulation_number, 
+                                                      rep_label, ".rds", sep = "")))
+      
+      print(paste("Generation lengths for folder", simulation_number,
+                  ", replicate number", rep_label, "complete"))
     }
   }
 }
+   
+get_generation_lengths(inputs, outputs)   
       
-      ## Rename columns
+## Rename columns
       
       names(generation_length_df) <- c("ID", "generation_length",
                                        "functionalgroup","adult_mass")
