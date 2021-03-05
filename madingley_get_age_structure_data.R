@@ -4,49 +4,15 @@
 ## Objective is to return the generation lengths of the 'virtual species' ie
 ## Functional group massbins
 
-#' @param indicators_project file path where all project data is kept eg 'N:/Quantitative-Ecology/Indicators-Project/'
-#' @param location string that denotes the directory of the location you want to process eg 'Serengeti'
-#' @param scenario string that denotes which impact directory you want to look in eg "Baseline"
-#' @param simulation name of the BuildModel directory you want to process eg  "001_BuildModel/"
-#' @param remove_juveniles string, can be "yes" or "no" to determine
-#' which age structures are saved (adults only, or all ages)
-#' @param burnin integer denoting burnin time (in months not years)
-#' @returns saves massbin, abundance, biomass and generation lengths to adaptor
-#' output folder
 
-#' TODO: Check the .rds files, don't think they're saving properly
-
-#' TODO: Restructure so this takes multiple other functions like process_buildmodel
-#' TODO: Fix plot functional groups? Or does it just look weird because there are few
-#' timesteps?
-#' TODO: Make this function remove burnin timesteps (for efficiency).  This will
+#' TODO: Make this function remove burnin timesteps? (for efficiency).  This will
 #' require updates to other indicator code though.
 
-
-## For testing:
-# 
-
-# inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/Test_runs/aa_BuildModel"
-# outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/Test_runs/aa_BuildModel"
-# simulation_folder_name <- "aa_BuildModel"
+# inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/999_Test_runs/991_BuildModel"
+# outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/999_Test_runs/991_BuildModel"
+# simulation_folder_name <- "991_BuildModel"
 # burnin <- 1 * 12
-# scenario <- "Test_runs"
-# 
-# get_age_structure_data(inputs, outputs, scenario, simulation_folder_name, burnin)
-
-inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/999_Test_runs/993_BuildModel"
-outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/999_Test_runs/993_BuildModel"
-simulation_folder_name <- "993_BuildModel"
-burnin <- 1 * 12
-scenario <- "999_Test_runs"
-# 
-# get_age_structure_data(inputs, outputs, scenario, simulation_folder_name, burnin)
-
-# inputs = simulation_paths
-# simulation = simulation_folder_names
-
-# FUNCTION 1 - Get the detailed cohort data ----
-
+# scenario <- "999_Test_runs"
 
 #' @param inputs string, path to directory where the raw simulation outputs
 #' are saved
@@ -94,7 +60,7 @@ get_generation_lengths <- function(inputs, outputs) {
     model_inputs <- dirs[str_detect(dirs, "input")]
     simulation_folder_name <- basename(inputs)
     simulation_number <- str_remove(simulation_folder_name, "_BuildModel")
-    scenario_label <- tolower(substring(scenario, 5))
+    scenario_label <- tolower(substring(simulation_folder_name, 5))
     scenario_label
     
     reps <- (length(results_files) - 9) / 14
@@ -153,32 +119,69 @@ get_generation_lengths <- function(inputs, outputs) {
       
       ## Get timestep each cohort was born
       
+      # born <- new_cohorts %>%
+      #   dplyr::select(ID,offspring_cohort_id, 
+      #                 functional_group, 
+      #                 adult_mass, time_step) %>%
+      #   rename(parent_cohort_id = ID,
+      #          offspring_born_timestep = time_step) %>%
+      #   filter(offspring_born_timestep != 0)
+      # head(born)
+      # 
+      # ## Get timestep for each year each cohort reproduces
+      # 
+      # reproduced <- new_cohorts %>%
+      #   dplyr::select(ID, time_step) %>%
+      #   rename(parent_cohort_id = ID,
+      #          parent_reproduced_timestep = time_step) %>%
+      #   filter(parent_reproduced_timestep != 0)
+      # 
+      # head(reproduced)
+      # 
+      # ## Merge to create dataframe with timestep born, timestep of reproduction (so
+      # # there can be only one timestep born per cohort, but multiple timesteps of reproduction)
+      # # Not all cohorts born also reproduce, which is why this creates a df with fewer
+      # # observations
+      # 
+      # born_reproduced <- merge(born, reproduced, by.x = "offspring_cohort_id", 
+      #                          by.y = "parent_cohort_id")
+      # 
+      # head(born_reproduced)
+      
       born <- new_cohorts %>%
-        dplyr::select(ID,offspring_cohort_id, 
-                      functional_group, 
-                      adult_mass, time_step) 
+               select(offspring_cohort_id, time_step,
+                      functional_group, adult_mass) %>%
+               filter(time_step != 0) %>%
+               rename(parent_cohort_id = offspring_cohort_id,
+                      parent_born_timestep = time_step)
+      
       head(born)
       
-      ## Get timestep for each year each cohort reproduces
-      
       reproduced <- new_cohorts %>%
-        dplyr::select(ID, time_step) 
+              select(ID, offspring_cohort_id, time_step) %>%
+              filter(time_step != 0) %>%
+              rename(parent_cohort_id = ID,
+                     parent_reproduced_timestep = time_step)
       
       head(reproduced)
       
-      ## Merge to create dataframe with timestep born, timestep of reproduction (so
-      # there can be only one timestep born per cohort, but multiple timesteps of reproduction)
-      # Not all cohorts born also reproduce, which is why this creates a df with fewer
-      # observations
-      
-      born_reproduced <- merge(born, reproduced, by.x = "offspring_cohort_id", 
-                               by.y = "ID")
-      
       born_reproduced <- born %>%
-        merge(reproduced, by.x = "offspring_cohort_id", 
-              by.y = "ID") %>%
-        dplyr::mutate(age_reproduced_years = (time_step.y - time_step.x)/12)
+              merge(reproduced, by = "parent_cohort_id") %>%
+              select(parent_cohort_id,parent_born_timestep, 
+                     parent_reproduced_timestep, everything()) %>%
+              mutate(age_reproduced_years = (parent_reproduced_timestep -
+                       parent_born_timestep)/12)
       
+      head(born_reproduced)
+      
+      max(born_reproduced$age_reproduced_years)
+      
+      
+      # born_reproduced <- born %>%
+      #   merge(reproduced, by.x = "offspring_cohort_id", 
+      #         by.y = "ID") %>%
+      #   dplyr::mutate(age_reproduced_years = (time_step.y - time_step.x)/12)
+      # 
       head(born_reproduced)
       dim(born_reproduced)
       
@@ -302,7 +305,7 @@ get_generation_lengths <- function(inputs, outputs) {
         group_by(group_id) %>% 
         summarize(generation_length = mean(age_reproduced_years)) %>%
         ungroup(.) %>% # Where gen_length is mean age of reproduction for that group (virtual species) in years
-        merge(.,born_reproduced_groups[ , c("ID","group_id",
+        merge(.,born_reproduced_groups[ , c("parent_cohort_id","group_id",
                                      "functional_group_index","functional_group_name",
                                      "adult_mass",
                                      "mass_lower", "mass_upper")],
@@ -314,8 +317,6 @@ get_generation_lengths <- function(inputs, outputs) {
                mass_upper_g = mass_upper) %>%
         mutate(functional_group_index = as.factor(functional_group_index)) %>%
         mutate(massbin_g = paste(mass_lower_g, mass_upper_g, sep = " - "))
-      
-      head(generation_length_df)
       
       # Save data ----
       
