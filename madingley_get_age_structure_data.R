@@ -65,6 +65,8 @@ get_generation_lengths <- function(inputs, outputs) {
   
   require(tidyverse)
   require(janitor)
+  require(viridis)
+  require(ggplot2)
   
 
   # Check how many replicates have already been processed
@@ -275,7 +277,8 @@ get_generation_lengths <- function(inputs, outputs) {
       for(i in seq_along(born_reproduced_groups_fg)) {
       
         br_groups_out[[i]] <- born_reproduced_groups_fg[[i]] %>%
-               merge(groups_fg[[i]][c("mass_lower", "mass_upper","bodymass_index")],
+               merge(groups_fg[[i]][c("mass_lower", "mass_upper","bodymass_index",
+                                      "functional_group_name")],
                      by = c("mass_lower", "mass_upper")) %>%
                mutate(group_id = paste(functional_group, bodymass_index, sep = "."))
         
@@ -293,14 +296,17 @@ get_generation_lengths <- function(inputs, outputs) {
         summarize(generation_length = mean(age_reproduced_years)) %>%
         ungroup(.) %>% # Where gen_length is mean age of reproduction for that group (virtual species) in years
         merge(.,born_reproduced_groups[ , c("ID","group_id",
-                                     "functional_group","adult_mass",
+                                     "functional_group_index","functional_group_name",
+                                     "adult_mass",
                                      "mass_lower", "mass_upper")],
               by = "group_id", all = TRUE) %>%
         unique() %>%
         rename(generation_length_yrs = generation_length, # add units
                adult_mass_g = adult_mass,
                mass_lower_g = mass_lower,
-               mass_upper_g = mass_upper)
+               mass_upper_g = mass_upper) %>%
+        mutate(functional_group_index = as.factor(functional_group_index)) %>%
+        mutate(massbin_g = paste(mass_lower_g, mass_upper_g, sep = " - "))
       
       head(generation_length_df)
       
@@ -315,6 +321,26 @@ get_generation_lengths <- function(inputs, outputs) {
       
       print(paste("Generation lengths for folder", simulation_number,
                   ", replicate number", rep_label, "complete"))
+      
+
+     gen_length_boxplot <- ggplot(generation_length_df) +
+        geom_boxplot(aes(x = functional_group_name, y = generation_length_yrs,
+                         group = functional_group_name, fill = functional_group_name)) +
+        scale_fill_viridis(discrete=TRUE) +
+        scale_color_viridis(discrete=TRUE) +
+        ggtitle(paste("Simulation", simulation_number,
+                      ", Replicate", rep_label, "Generation Lengths",
+                      sep = " ")) +
+       theme(axis.text.x=element_blank(),
+             axis.ticks.x=element_blank()) +
+       xlab("Functional group") + ylab("Generation lengths (years)")
+     
+     ggsave(file.path(outputs,
+                      paste("BoxplotGenerationLengths_",
+                            simulation_number, 
+                            rep_label, ".png", sep = "")),
+            gen_length_boxplot, device = "png")
+     
     }
   }
 }
