@@ -1,6 +1,8 @@
 
 ## NEW VERSION
 
+## REPOSITORY: conservationscience/species_to_models
+
 ## Objective is to return the generation lengths of the 'virtual species' ie
 ## Functional group massbins
 
@@ -8,9 +10,9 @@
 #' TODO: Make this function remove burnin timesteps? (for efficiency).  This will
 #' require updates to other indicator code though.
 
-# inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/999_Test_runs/991_BuildModel"
-# outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/999_Test_runs/991_BuildModel"
-# simulation_folder_name <- "991_BuildModel"
+# inputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Inputs_to_adaptor_code/Madingley_simulation_outputs/999_Test_runs/993_BuildModel"
+# outputs <- "N:/Quantitative-Ecology/Indicators-Project/Serengeti/Outputs_from_adaptor_code/map_of_life/999_Test_runs/993_BuildModel"
+# simulation_folder_name <- "993_BuildModel"
 # burnin <- 1 * 12
 # scenario <- "999_Test_runs"
 
@@ -41,8 +43,10 @@ get_generation_lengths <- function(inputs, outputs) {
   
   files <- dir(outputs)
   
-  files <- files[grep("generation",files)] 
+  files <- files[grep("GenerationLength",files)] 
+  files <- files[grep(".csv",files)] 
   length(files)
+  files
   
   # Check and create output directory
   
@@ -71,7 +75,7 @@ get_generation_lengths <- function(inputs, outputs) {
     
     if ((dir.exists(file.path(outputs))) & (length(files) == length(rep_index))) {
       
-      print(paste("BuildModel folder", sim_label, "has already been processed",
+      print(paste("BuildModel folder", simulation_number, "has already been processed",
                   sep = " "))
     }
     
@@ -88,6 +92,9 @@ get_generation_lengths <- function(inputs, outputs) {
       rep_files[[rep]] <- results_files[grep(rep_index[rep],results_files)]
       
     }
+    
+    # Make a label for each replicate so we can correctly label the outputs of
+    # the function by it's replicate number
     
     for (i in seq_along(rep_files)) {
       
@@ -203,7 +210,8 @@ get_generation_lengths <- function(inputs, outputs) {
                                             include.lowest = FALSE,
                                             right = TRUE,
                                             na.rm = FALSE,
-                                            dig.lab = 11))
+                                            dig.lab = 11)) %>%
+              ungroup()
       
       # Re-format the massbin column(s) so they match the groups DF, so then
       # we can match up the two and add virtual species group_id to the 
@@ -287,12 +295,14 @@ get_generation_lengths <- function(inputs, outputs) {
       
         br_groups_out[[i]] <- born_reproduced_groups_fg[[i]] %>%
                merge(groups_fg[[i]][c("mass_lower", "mass_upper","bodymass_index",
-                                      "functional_group_name")],
-                     by = c("mass_lower", "mass_upper")) %>%
-               mutate(group_id = paste(functional_group, bodymass_index, sep = "."))
+                                      "functional_group_name", 
+                                      "functional_group_index")],
+                     by = c("mass_lower", "mass_upper", "functional_group_index")) %>%
+               mutate(group_id = paste(functional_group_index, bodymass_index, sep = "."))
         
       }
       
+    
       born_reproduced_groups <- do.call(rbind, br_groups_out)
       
       head(born_reproduced_groups)
@@ -316,7 +326,11 @@ get_generation_lengths <- function(inputs, outputs) {
                mass_lower_g = mass_lower,
                mass_upper_g = mass_upper) %>%
         mutate(functional_group_index = as.factor(functional_group_index)) %>%
-        mutate(massbin_g = paste(mass_lower_g, mass_upper_g, sep = " - "))
+        mutate(massbin_g = paste(mass_lower_g, mass_upper_g, sep = " to "),
+               massbin_g = as.factor(massbin_g),
+               mass_lower_g = as.numeric(mass_lower_g),
+               mass_upper_g = as.numeric(mass_upper_g)) %>%
+        ungroup()
       
       # Save data ----
       
