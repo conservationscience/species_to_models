@@ -67,7 +67,11 @@ get_generation_lengths <- function(inputs, outputs) {
     scenario_label <- tolower(substring(simulation_folder_name, 5))
     scenario_label
     
-    reps <- (length(results_files) - 9) / 14
+    reps <- read.csv(file.path(model_results, "Scenarios.csv")) %>% 
+            dplyr::select(simulation.number) %>% 
+            pull(.)
+    
+    #reps <- (length(results_files) - 9) / 14
     rep_numbers <- as.character(seq(0,(reps - 1)))
     rep_index <- paste("_", rep_numbers, "_", sep = "")
     
